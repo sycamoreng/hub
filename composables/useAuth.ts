@@ -62,6 +62,14 @@ export function useAuth() {
     return false
   }
 
+  async function claimStaff() {
+    try {
+      await supabase.rpc('claim_staff_member')
+    } catch {
+      /* non-fatal: staff record may not exist yet */
+    }
+  }
+
   async function init() {
     if (ready.value) return
     const { data } = await supabase.auth.getSession()
@@ -69,6 +77,7 @@ export function useAuth() {
     const ok = await enforceAllowedDomain(user.value)
     if (ok) {
       await loadAdminRecord(user.value?.email)
+      if (user.value) await claimStaff()
     }
     supabase.auth.onAuthStateChange((_event, session) => {
       user.value = session?.user ?? null
@@ -77,6 +86,7 @@ export function useAuth() {
         if (allowed) {
           domainError.value = null
           await loadAdminRecord(user.value?.email)
+          if (user.value) await claimStaff()
         }
       })()
     })

@@ -50,7 +50,7 @@ function initials(name: string) {
     <div v-if="loading" class="text-slate-400">Loading staff...</div>
     <div v-else-if="filtered.length === 0" class="text-slate-400">No staff match your filters.</div>
     <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <article v-for="s in filtered" :key="s.id" class="card card-hover p-5 flex gap-4">
+      <NuxtLink v-for="s in filtered" :key="s.id" :to="`/profile/${s.id}`" class="card card-hover p-5 flex gap-4">
         <div class="w-14 h-14 rounded-full bg-gradient-to-br from-sycamore-400 to-sycamore-700 text-white flex items-center justify-center font-bold text-lg flex-shrink-0">
           {{ initials(s.full_name) }}
         </div>
@@ -60,12 +60,10 @@ function initials(name: string) {
           <div class="text-xs text-slate-500 mt-1">
             <span v-if="s.departments?.name" class="badge badge-green">{{ s.departments.name }}</span>
           </div>
-          <div class="text-xs text-slate-500 mt-2 truncate">
-            <a :href="`mailto:${s.email}`" class="hover:text-sycamore-700">{{ s.email }}</a>
-          </div>
+          <div class="text-xs text-slate-500 mt-2 truncate">{{ s.email }}</div>
           <div v-if="s.locations" class="text-xs text-slate-400 mt-0.5">{{ s.locations.city }}</div>
         </div>
-      </article>
+      </NuxtLink>
     </div>
   </div>
 </template>

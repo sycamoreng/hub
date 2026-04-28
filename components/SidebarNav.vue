@@ -3,18 +3,12 @@ interface NavItem { to: string; label: string; icon: string }
 interface NavGroup { id: string; label: string; icon: string; items: NavItem[] }
 
 const standalone: NavItem[] = [
-  { to: '/', label: 'Home', icon: 'home' }
+  { to: '/', label: 'Home', icon: 'home' },
+  { to: '/feed', label: 'Feed', icon: 'chat' },
+  { to: '/onboarding', label: 'Onboarding', icon: 'check' }
 ]
 
 const groups: NavGroup[] = [
-  {
-    id: 'getting-started',
-    label: 'Getting started',
-    icon: 'check',
-    items: [
-      { to: '/onboarding', label: 'Onboarding', icon: 'check' }
-    ]
-  },
   {
     id: 'company',
     label: 'Company',
