@@ -1,0 +1,1 @@
+{"version":3,"file":"virtual_public-BhHsw8T-.js","sources":["../../../../virtual:public?%2Flogo-icon.png"],"sourcesContent":["import { publicAssetsURL } from '#internal/nuxt/paths';export default publicAssetsURL(\"/logo-icon.png\")"],"names":[],"mappings":";AAAuD,MAAA,aAAe,gBAAgB,gBAAgB;"}

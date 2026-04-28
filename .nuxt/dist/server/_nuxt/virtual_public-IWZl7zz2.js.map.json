@@ -1,0 +1,1 @@
+{"file":"virtual_public-IWZl7zz2.js","mappings":";AAAuD,MAAA,aAAe,gBAAgB,WAAW;","names":[],"sources":["../../../../virtual:public?%2Flogo.png"],"sourcesContent":["import { publicAssetsURL } from '#internal/nuxt/paths';export default publicAssetsURL(\"/logo.png\")"],"version":3}
