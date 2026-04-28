@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   summarizeReactions,
+  type PostKind,
   type PostMention,
   type PostRow,
   type ReactionKey,
@@ -15,6 +16,8 @@ interface AnnouncementRow {
   priority: string
   is_active: boolean
   created_at: string
+  image_url?: string
+  summary?: string
 }
 
 interface AuthorMeta {
@@ -27,8 +30,9 @@ interface AuthorMeta {
 
 const supabase = useSupabase()
 const { user, ready, isAuthenticated } = useAuth()
-const { fetchPosts, createPost, deletePost, fetchReactions, toggleReaction, fetchMentionsForPosts } = useFeed()
+const { fetchPosts, createPost, deletePost, fetchReactions, toggleReaction, fetchMentionsForPosts, fetchMentionsForAnnouncements } = useFeed()
 const { fetchProfilesByUserIds } = useProfile()
+const toast = useToast()
 
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -37,70 +41,13 @@ const announcements = ref<AnnouncementRow[]>([])
 const reactions = ref<ReactionRow[]>([])
 const authors = ref<Record<string, AuthorMeta>>({})
 const mentionsByPost = ref<Record<string, PostMention[]>>({})
-const staffSuggestions = ref<{ id: string; full_name: string; auth_user_id: string | null }[]>([])
-
+const mentionsByAnnouncement = ref<Record<string, PostMention[]>>({})
 const composer = ref('')
+const composerImage = ref('')
+const composerKind = ref<PostKind>('standard')
+const composerTemplateData = ref<Record<string, any>>({})
+const templatePickerOpen = ref(false)
 const submitting = ref(false)
-const composerEl = ref<HTMLTextAreaElement | null>(null)
-const mentionQuery = ref<string | null>(null)
-const mentionAnchor = ref(0)
-const mentionHighlight = ref(0)
-
-const filteredMentionMatches = computed(() => {
-  if (mentionQuery.value === null) return []
-  const q = mentionQuery.value.toLowerCase()
-  const list = staffSuggestions.value.filter(s => s.full_name.toLowerCase().includes(q))
-  return list.slice(0, 6)
-})
-
-function onComposerInput() {
-  const el = composerEl.value
-  if (!el) return
-  const cursor = el.selectionStart ?? composer.value.length
-  const upto = composer.value.slice(0, cursor)
-  const at = upto.lastIndexOf('@')
-  if (at === -1) { mentionQuery.value = null; return }
-  const after = upto.slice(at + 1)
-  if (/\s/.test(after) || after.length > 30) { mentionQuery.value = null; return }
-  const before = at === 0 ? '' : upto[at - 1]
-  if (before && !/\s/.test(before)) { mentionQuery.value = null; return }
-  mentionQuery.value = after
-  mentionAnchor.value = at
-  mentionHighlight.value = 0
-}
-
-function applyMention(name: string) {
-  if (mentionQuery.value === null) return
-  const el = composerEl.value
-  const start = mentionAnchor.value
-  const end = (el?.selectionStart ?? composer.value.length)
-  const before = composer.value.slice(0, start)
-  const after = composer.value.slice(end)
-  const insert = '@' + name + ' '
-  composer.value = before + insert + after
-  mentionQuery.value = null
-  nextTick(() => {
-    if (el) {
-      const pos = (before + insert).length
-      el.focus()
-      el.setSelectionRange(pos, pos)
-    }
-  })
-}
-
-function onComposerBlur() {
-  setTimeout(() => { mentionQuery.value = null }, 150)
-}
-
-function onComposerKey(e: KeyboardEvent) {
-  if (mentionQuery.value === null) return
-  const matches = filteredMentionMatches.value
-  if (matches.length === 0) return
-  if (e.key === 'ArrowDown') { e.preventDefault(); mentionHighlight.value = (mentionHighlight.value + 1) % matches.length }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); mentionHighlight.value = (mentionHighlight.value - 1 + matches.length) % matches.length }
-  else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applyMention(matches[mentionHighlight.value].full_name) }
-  else if (e.key === 'Escape') { mentionQuery.value = null }
-}
 
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase() ?? '').join('') || '?'
@@ -141,25 +88,20 @@ async function load() {
     ])
     posts.value = p
     announcements.value = (a.data ?? []) as AnnouncementRow[]
-    const [rxs, mentions] = await Promise.all([
+    const [rxs, mentions, annMentions] = await Promise.all([
       fetchReactions([
         { type: 'post', ids: posts.value.map(x => x.id) },
         { type: 'announcement', ids: announcements.value.map(x => x.id) }
       ]),
-      fetchMentionsForPosts(posts.value.map(x => x.id))
+      fetchMentionsForPosts(posts.value.map(x => x.id)),
+      fetchMentionsForAnnouncements(announcements.value.map(x => x.id))
     ])
     reactions.value = rxs
     mentionsByPost.value = mentions
-    await loadAuthors(posts.value.map(p => p.author_id))
-    if (staffSuggestions.value.length === 0) {
-      const { data: suggestions } = await supabase
-        .from('staff_members')
-        .select('id, full_name, auth_user_id')
-        .eq('is_active', true)
-        .not('auth_user_id', 'is', null)
-        .order('full_name')
-      staffSuggestions.value = (suggestions ?? []) as any[]
-    }
+    mentionsByAnnouncement.value = annMentions
+    const reactorIds = Array.from(new Set(rxs.map(r => r.user_id)))
+    const allAuthorIds = Array.from(new Set([...posts.value.map(p => p.author_id), ...reactorIds]))
+    await loadAuthors(allAuthorIds)
   } catch (e: any) {
     error.value = e.message ?? 'Failed to load feed'
   } finally {
@@ -184,6 +126,16 @@ function summary(targetType: ReactionTargetType, targetId: string) {
     reactionsByTarget.value[`${targetType}:${targetId}`] ?? [],
     user.value?.id ?? null
   )
+}
+
+function reactorsFor(targetType: ReactionTargetType, targetId: string): Record<string, string[]> {
+  const map: Record<string, string[]> = {}
+  const list = reactionsByTarget.value[`${targetType}:${targetId}`] ?? []
+  for (const r of list) {
+    const name = authors.value[r.user_id]?.name || 'Sycamore staff'
+    ;(map[r.emoji] ||= []).push(name)
+  }
+  return map
 }
 
 async function handleToggle(payload: { targetType: ReactionTargetType; targetId: string; emoji: ReactionKey; on: boolean }) {
@@ -212,13 +164,36 @@ async function handleToggle(payload: { targetType: ReactionTargetType; targetId:
   }
 }
 
+function applyTemplate(payload: { kind: PostKind; data: Record<string, any>; text: string }) {
+  composerKind.value = payload.kind
+  composerTemplateData.value = payload.data
+  composer.value = composer.value.trim() ? composer.value : payload.text
+}
+
+function clearTemplate() {
+  composerKind.value = 'standard'
+  composerTemplateData.value = {}
+}
+
+const activeTemplate = computed(() => {
+  if (composerKind.value === 'standard') return null
+  return null
+})
+
 async function submitPost() {
   if (!user.value || !composer.value.trim()) return
   submitting.value = true
   try {
-    const created = await createPost(user.value.id, composer.value)
+    const created = await createPost(user.value.id, composer.value, {
+      image_url: composerImage.value.trim() || undefined,
+      post_kind: composerKind.value,
+      template_data: composerTemplateData.value
+    })
     posts.value = [created, ...posts.value]
     composer.value = ''
+    composerImage.value = ''
+    composerKind.value = 'standard'
+    composerTemplateData.value = {}
     await loadAuthors([created.author_id])
     const fresh = await fetchMentionsForPosts([created.id])
     mentionsByPost.value = { ...mentionsByPost.value, ...fresh }
@@ -230,12 +205,14 @@ async function submitPost() {
 }
 
 async function removePost(id: string) {
-  if (!confirm('Delete this post? This cannot be undone.')) return
+  const ok = await toast.confirm({ title: 'Delete post', message: 'This cannot be undone.', variant: 'danger', confirmLabel: 'Delete' })
+  if (!ok) return
   try {
     await deletePost(id)
     posts.value = posts.value.filter(p => p.id !== id)
+    toast.success('Post deleted')
   } catch (e: any) {
-    error.value = e.message ?? 'Could not delete post'
+    toast.error(e.message ?? 'Could not delete post')
   }
 }
 
@@ -256,37 +233,36 @@ definePageMeta({ title: 'Feed' })
 
     <ClientOnly>
       <div v-if="isAuthenticated" class="card p-5">
-        <div class="relative">
-          <textarea
-            ref="composerEl"
-            v-model="composer"
-            rows="3"
-            maxlength="4000"
-            class="input"
-            placeholder="Share something with the team... use @ to mention a colleague"
-            @input="onComposerInput"
-            @keydown="onComposerKey"
-            @blur="onComposerBlur"
-          />
-          <div
-            v-if="mentionQuery !== null && filteredMentionMatches.length"
-            class="absolute z-10 left-0 right-0 sm:right-auto sm:w-72 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden"
-          >
+        <MentionTextarea
+          v-model="composer"
+          :rows="3"
+          :maxlength="4000"
+          placeholder="Share something with the team... use @ to mention a colleague"
+        />
+        <div v-if="composerKind !== 'standard'" class="mt-3 flex items-center gap-2 text-xs">
+          <span class="badge badge-green capitalize">{{ composerKind }}</span>
+          <span class="text-slate-500">Template applied</span>
+          <button type="button" class="ml-auto text-slate-400 hover:text-rose-600 inline-flex items-center gap-1" @click="clearTemplate">
+            <SidebarIcon name="close" /> remove
+          </button>
+        </div>
+
+        <div class="mt-3">
+          <label class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Image (optional)</label>
+          <input v-model="composerImage" class="input" placeholder="https://... paste an image URL to attach" />
+        </div>
+
+        <div class="flex items-center justify-between gap-3 mt-3">
+          <div class="flex items-center gap-2">
             <button
-              v-for="(s, i) in filteredMentionMatches"
-              :key="s.id"
               type="button"
-              class="w-full text-left px-3 py-2 text-sm flex items-center gap-2"
-              :class="i === mentionHighlight ? 'bg-sycamore-50 text-sycamore-800' : 'hover:bg-slate-50 text-slate-700'"
-              @mousedown.prevent="applyMention(s.full_name)"
+              class="btn-secondary text-xs inline-flex items-center gap-1"
+              @click="templatePickerOpen = true"
             >
-              <span class="text-xs text-slate-400">@</span>
-              <span class="font-medium">{{ s.full_name }}</span>
+              <SidebarIcon name="sparkle" /> Template
             </button>
           </div>
-        </div>
-        <div class="flex items-center justify-between mt-3">
-          <div class="text-xs text-slate-400">{{ composer.length }} / 4000 &middot; type @ to mention a colleague</div>
+          <div class="text-xs text-slate-400 hidden sm:block">{{ composer.length }} / 4000 &middot; type @ to mention</div>
           <button
             type="button"
             class="btn-primary"
@@ -301,6 +277,7 @@ definePageMeta({ title: 'Feed' })
         <NuxtLink to="/login" class="text-sycamore-700 font-medium hover:underline">Sign in</NuxtLink>
         to post and react.
       </div>
+      <PostTemplatePicker :open="templatePickerOpen" @close="templatePickerOpen = false" @apply="applyTemplate" />
     </ClientOnly>
 
     <p v-if="error" class="text-xs text-rose-600">{{ error }}</p>
@@ -308,26 +285,40 @@ definePageMeta({ title: 'Feed' })
     <div v-if="loading" class="text-sm text-slate-400">Loading feed...</div>
 
     <template v-else>
-      <section v-if="announcements.length" class="space-y-3">
+      <section v-if="announcements.length" class="space-y-4">
         <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Announcements</h2>
-        <article v-for="a in announcements" :key="a.id" class="card p-5">
-          <div class="flex items-start gap-3">
+        <article v-for="a in announcements" :key="a.id" class="card overflow-hidden">
+          <figure v-if="a.image_url" class="relative">
+            <img :src="a.image_url" :alt="a.title" class="w-full h-56 sm:h-72 object-cover" />
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/10 to-transparent" />
             <span :class="[
-              'badge mt-1',
+              'absolute top-4 left-4 badge',
               a.priority === 'high' ? 'badge-rose' : a.priority === 'medium' ? 'badge-amber' : 'badge-slate'
             ]">{{ a.priority }}</span>
-            <div class="min-w-0 flex-1">
-              <h3 class="font-semibold text-slate-900">{{ a.title }}</h3>
-              <p class="text-sm text-slate-700 whitespace-pre-line mt-1">{{ a.content }}</p>
-              <div class="text-xs text-slate-400 mt-2">{{ formatTime(a.created_at) }}</div>
-              <ReactionBar
-                :target-type="'announcement'"
-                :target-id="a.id"
-                :summary="summary('announcement', a.id)"
-                :disabled="!isAuthenticated"
-                @toggle="handleToggle"
-              />
+            <div class="absolute bottom-4 left-4 right-4 text-white">
+              <h3 class="text-xl sm:text-2xl font-bold tracking-tight drop-shadow">{{ a.title }}</h3>
+              <p v-if="a.summary" class="text-sm text-white/90 mt-1 line-clamp-2">{{ a.summary }}</p>
             </div>
+          </figure>
+          <div class="p-5">
+            <div v-if="!a.image_url" class="flex items-center gap-2 mb-2">
+              <span :class="[
+                'badge',
+                a.priority === 'high' ? 'badge-rose' : a.priority === 'medium' ? 'badge-amber' : 'badge-slate'
+              ]">{{ a.priority }}</span>
+              <h3 class="font-semibold text-slate-900">{{ a.title }}</h3>
+            </div>
+            <p v-if="a.summary && a.image_url" class="text-sm font-medium text-slate-800 mb-2">{{ a.summary }}</p>
+            <PostBody class="block text-sm text-slate-700" :content="a.content" :mentions="mentionsByAnnouncement[a.id]" />
+            <div class="text-xs text-slate-400 mt-2">{{ formatTime(a.created_at) }}</div>
+            <ReactionBar
+              :target-type="'announcement'"
+              :target-id="a.id"
+              :summary="summary('announcement', a.id)"
+              :reactors-by-emoji="reactorsFor('announcement', a.id)"
+              :disabled="!isAuthenticated"
+              @toggle="handleToggle"
+            />
           </div>
         </article>
       </section>
@@ -335,53 +326,38 @@ definePageMeta({ title: 'Feed' })
       <section class="space-y-3">
         <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Posts</h2>
         <p v-if="posts.length === 0" class="text-sm text-slate-400">No posts yet. Be the first to share something.</p>
-        <article v-for="p in posts" :key="p.id" class="card p-5">
-          <div class="flex items-start gap-3">
-            <img
-              v-if="authors[p.author_id]?.avatar"
-              :src="authors[p.author_id]?.avatar!"
-              :alt="authors[p.author_id]?.name"
-              referrerpolicy="no-referrer"
-              class="w-10 h-10 rounded-full object-cover border border-slate-200 flex-shrink-0"
+        <PostCard
+          v-for="p in posts"
+          :key="p.id"
+          :post="p"
+          :author-name="authors[p.author_id]?.name"
+          :author-avatar="authors[p.author_id]?.avatar"
+          :author-staff-id="authors[p.author_id]?.staff_id"
+          :author-initials="authors[p.author_id]?.initials"
+          :mentions="mentionsByPost[p.id]"
+          :formatted-time="formatTime(p.created_at)"
+        >
+          <template #actions>
+            <button
+              v-if="user && p.author_id === user.id"
+              type="button"
+              class="text-slate-400 hover:text-rose-600 text-xs inline-flex items-center gap-1"
+              @click="removePost(p.id)"
+            >
+              <SidebarIcon name="trash" /> Delete
+            </button>
+          </template>
+          <template #footer>
+            <ReactionBar
+              :target-type="'post'"
+              :target-id="p.id"
+              :summary="summary('post', p.id)"
+              :reactors-by-emoji="reactorsFor('post', p.id)"
+              :disabled="!isAuthenticated"
+              @toggle="handleToggle"
             />
-            <div v-else class="w-10 h-10 rounded-full bg-sycamore-100 text-sycamore-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">
-              {{ authors[p.author_id]?.initials || '?' }}
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center justify-between gap-3">
-                <div class="min-w-0">
-                  <NuxtLink
-                    v-if="authors[p.author_id]?.staff_id"
-                    :to="`/profile/${authors[p.author_id]?.staff_id}`"
-                    class="font-semibold text-slate-900 text-sm hover:text-sycamore-700 truncate"
-                  >
-                    {{ authors[p.author_id]?.name }}
-                  </NuxtLink>
-                  <span v-else class="font-semibold text-slate-900 text-sm truncate">
-                    {{ authors[p.author_id]?.name || 'Sycamore staff' }}
-                  </span>
-                  <div class="text-xs text-slate-400">{{ formatTime(p.created_at) }}</div>
-                </div>
-                <button
-                  v-if="user && p.author_id === user.id"
-                  type="button"
-                  class="text-slate-400 hover:text-rose-600 text-xs inline-flex items-center gap-1"
-                  @click="removePost(p.id)"
-                >
-                  <SidebarIcon name="trash" /> Delete
-                </button>
-              </div>
-              <PostBody class="block text-sm text-slate-700 mt-2" :content="p.content" :mentions="mentionsByPost[p.id]" />
-              <ReactionBar
-                :target-type="'post'"
-                :target-id="p.id"
-                :summary="summary('post', p.id)"
-                :disabled="!isAuthenticated"
-                @toggle="handleToggle"
-              />
-            </div>
-          </div>
-        </article>
+          </template>
+        </PostCard>
       </section>
     </template>
   </div>

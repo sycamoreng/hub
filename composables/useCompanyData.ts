@@ -110,12 +110,17 @@ export function useCompanyData() {
   async function fetchOnboardingSteps() {
     const { data, error } = await supabase
       .from('onboarding_steps')
-      .select('*')
+      .select('*, onboarding_resources(*)')
       .eq('is_active', true)
       .order('display_order', { ascending: true })
       .order('title', { ascending: true })
     if (error) throw error
-    return data ?? []
+    return (data ?? []).map((s: any) => ({
+      ...s,
+      onboarding_resources: (s.onboarding_resources ?? [])
+        .slice()
+        .sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    }))
   }
 
   async function fetchProducts() {

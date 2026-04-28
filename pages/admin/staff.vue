@@ -4,6 +4,7 @@ import { useSupabase } from '~/utils/supabase'
 
 const supabase = useSupabase()
 const { items, loading, load, create, update, remove } = useCrud('staff_members')
+const toast = useToast()
 const departments = ref<any[]>([])
 const locations = ref<any[]>([])
 
@@ -60,13 +61,14 @@ async function save(payload: Record<string, any>) {
     if (editing.value?.id) await update(editing.value.id, data)
     else await create(data)
     editorOpen.value = false
-  } catch (e: any) { alert(e.message ?? 'Failed to save') }
+  } catch (e: any) { toast.error(e.message ?? 'Failed to save') }
   finally { saving.value = false }
 }
 
 async function del(row: any) {
-  if (!confirm(`Delete "${row.full_name}"?`)) return
-  try { await remove(row.id) } catch (e: any) { alert(e.message ?? 'Failed to delete') }
+  const ok = await toast.confirm({ title: 'Delete', message: `Delete "${row.full_name}"?` + ' This cannot be undone.', variant: 'danger', confirmLabel: 'Delete' })
+  if (!ok) return
+  try { await remove(row.id); toast.success('Deleted') } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
 }
 </script>
 

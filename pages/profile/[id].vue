@@ -181,7 +181,7 @@ const googleChatUrl = computed(() => {
             </div>
             <div v-if="staff.phone" class="flex items-center gap-2 text-slate-700">
               <SidebarIcon name="phone" />
-              <span>{{ staff.phone }}</span>
+              <a :href="`tel:${staff.phone}`" class="hover:text-sycamore-700">{{ staff.phone }}</a>
             </div>
             <div v-if="!claimed" class="text-xs text-slate-400 italic pt-1">
               This colleague has not signed into the hub yet, so Google Chat is unavailable.

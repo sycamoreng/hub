@@ -7,6 +7,7 @@ type Field = {
   required?: boolean
   placeholder?: string
   hint?: string
+  mention?: boolean
 }
 
 const props = defineProps<{
@@ -77,8 +78,15 @@ function submit() {
                 {{ f.label }}<span v-if="f.required" class="text-rose-600 ml-0.5">*</span>
               </label>
 
+              <MentionTextarea
+                v-if="f.type === 'textarea' && f.mention"
+                v-model="form[f.key]"
+                :placeholder="f.placeholder"
+                :rows="5"
+              />
+
               <textarea
-                v-if="f.type === 'textarea'"
+                v-else-if="f.type === 'textarea'"
                 :id="`f-${f.key}`"
                 v-model="form[f.key]"
                 :placeholder="f.placeholder"

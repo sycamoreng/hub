@@ -1,19 +1,50 @@
 <script setup lang="ts">
 import { useSupabase } from '~/utils/supabase'
+import { toEmbedUrl } from '~/composables/useVideoEmbed'
+
+interface Resource {
+  id: string
+  step_id: string
+  kind: 'video' | 'article' | 'link' | 'file' | 'document' | string
+  title: string
+  description: string
+  url: string
+  body: string
+  display_order: number
+}
+
+interface Step {
+  id: string
+  title: string
+  description: string
+  category: string
+  resource_url: string
+  is_required: boolean
+  display_order: number
+  is_active: boolean
+  content_type: 'task' | 'video' | 'article' | 'module' | string
+  body: string
+  video_url: string
+  cover_image_url: string
+  estimated_minutes: number
+  onboarding_resources: Resource[]
+}
 
 const supabase = useSupabase()
 const { fetchOnboardingSteps } = useCompanyData()
 const { user } = useAuth()
+const toast = useToast()
 
-const steps = ref<any[]>([])
+const steps = ref<Step[]>([])
 const completed = ref<Record<string, boolean>>({})
 const loading = ref(true)
 const saving = ref<Record<string, boolean>>({})
+const expanded = ref<Record<string, boolean>>({})
 
 async function loadAll() {
   loading.value = true
   try {
-    steps.value = await fetchOnboardingSteps()
+    steps.value = (await fetchOnboardingSteps()) as Step[]
     if (user.value) {
       const { data } = await supabase
         .from('onboarding_progress')
@@ -31,7 +62,7 @@ async function loadAll() {
 onMounted(loadAll)
 watch(() => user.value?.id, loadAll)
 
-async function toggle(step: any) {
+async function toggle(step: Step) {
   if (!user.value) {
     await navigateTo(`/login?redirect=/onboarding`)
     return
@@ -45,16 +76,17 @@ async function toggle(step: any) {
     } else {
       await supabase.from('onboarding_progress').insert({ user_id: user.value.id, step_id: step.id })
       completed.value = { ...completed.value, [step.id]: true }
+      toast.success('Marked complete')
     }
   } catch (e: any) {
-    alert(e.message ?? 'Failed to update progress')
+    toast.error(e.message ?? 'Failed to update progress')
   } finally {
     saving.value[step.id] = false
   }
 }
 
 const grouped = computed(() => {
-  const m: Record<string, any[]> = {}
+  const m: Record<string, Step[]> = {}
   for (const s of steps.value) {
     const c = s.category || 'general'
     ;(m[c] ||= []).push(s)
@@ -71,6 +103,24 @@ const stats = computed(() => {
   const requiredDone = steps.value.filter(s => s.is_required && completed.value[s.id]).length
   return { total, required, done, requiredDone, percent: total ? Math.round((done / total) * 100) : 0 }
 })
+
+function totalMinutes(cat: string) {
+  return grouped.value[cat]?.reduce((sum, s) => sum + (s.estimated_minutes || 0), 0) ?? 0
+}
+
+const kindMeta: Record<string, { label: string; tone: string }> = {
+  video:    { label: 'Video',    tone: 'bg-rose-100 text-rose-700' },
+  article:  { label: 'Reading',  tone: 'bg-sycamore-100 text-sycamore-700' },
+  link:     { label: 'Link',     tone: 'bg-slate-100 text-slate-700' },
+  file:     { label: 'Download', tone: 'bg-amber-100 text-amber-700' },
+  document: { label: 'Doc',      tone: 'bg-leaf-100 text-leaf-700' },
+  task:     { label: 'Task',     tone: 'bg-slate-100 text-slate-700' },
+  module:   { label: 'Module',   tone: 'bg-sycamore-100 text-sycamore-700' }
+}
+
+function toggleExpand(id: string) {
+  expanded.value = { ...expanded.value, [id]: !expanded.value[id] }
+}
 </script>
 
 <template>
@@ -79,10 +129,10 @@ const stats = computed(() => {
       <div class="relative z-10">
         <div class="badge bg-white/15 text-white border-white/20 mb-4">
           <SidebarIcon name="check" />
-          <span class="ml-1">Onboarding</span>
+          <span class="ml-1">Learning hub</span>
         </div>
         <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Welcome to Sycamore</h1>
-        <p class="text-sycamore-100 max-w-2xl">A guided checklist of everything you should know in your first weeks.</p>
+        <p class="text-sycamore-100 max-w-2xl">A guided path of videos, readings, and tasks to get you fully oriented in your first weeks.</p>
         <div v-if="user" class="mt-6 max-w-md">
           <div class="flex items-center justify-between text-sm mb-2">
             <span>{{ stats.done }} of {{ stats.total }} completed</span>
@@ -102,44 +152,138 @@ const stats = computed(() => {
       <div class="absolute -right-16 -bottom-16 w-80 h-80 rounded-full bg-white/5" />
     </div>
 
-    <div v-if="loading" class="text-slate-400">Loading onboarding checklist...</div>
+    <div v-if="loading" class="text-slate-400">Loading learning path...</div>
     <div v-else-if="steps.length === 0" class="card p-8 text-center text-slate-500">
-      No onboarding steps have been set up yet.
+      No onboarding content has been set up yet.
     </div>
-    <div v-else class="space-y-8">
+    <div v-else class="space-y-10">
       <section v-for="cat in categories" :key="cat">
-        <h2 class="section-title capitalize mb-4">{{ cat }}</h2>
-        <div class="space-y-3">
+        <div class="flex items-baseline justify-between mb-4">
+          <h2 class="section-title capitalize">{{ cat }}</h2>
+          <div class="text-xs text-slate-400">
+            {{ grouped[cat].length }} item{{ grouped[cat].length === 1 ? '' : 's' }}
+            <template v-if="totalMinutes(cat) > 0"> &middot; ~{{ totalMinutes(cat) }} min</template>
+          </div>
+        </div>
+
+        <div class="space-y-4">
           <article
             v-for="s in grouped[cat]"
             :key="s.id"
-            class="card p-5 flex items-start gap-4"
-            :class="completed[s.id] ? 'bg-leaf-50/50 border-leaf-200' : ''"
+            class="card overflow-hidden transition-colors"
+            :class="completed[s.id] ? 'bg-leaf-50/40 border-leaf-200' : ''"
           >
-            <button
-              type="button"
-              :disabled="saving[s.id]"
-              @click="toggle(s)"
-              :class="[
-                'flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors mt-0.5',
-                completed[s.id] ? 'bg-leaf-600 border-leaf-600 text-white' : 'border-slate-300 hover:border-sycamore-500'
-              ]"
-              :aria-label="completed[s.id] ? 'Mark incomplete' : 'Mark complete'"
-            >
-              <svg v-if="completed[s.id]" xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4L8.5 12l6.8-6.8a1 1 0 0 1 1.4 0Z" clip-rule="evenodd" />
-              </svg>
-            </button>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="font-semibold text-slate-900">{{ s.title }}</h3>
-                <span v-if="s.is_required" class="badge badge-amber">Required</span>
-                <span v-else class="badge badge-slate">Optional</span>
+            <div v-if="s.cover_image_url" class="aspect-[16/6] w-full bg-slate-100 overflow-hidden">
+              <img :src="s.cover_image_url" :alt="s.title" class="w-full h-full object-cover" />
+            </div>
+
+            <div class="p-5 flex items-start gap-4">
+              <button
+                type="button"
+                :disabled="saving[s.id]"
+                @click="toggle(s)"
+                :class="[
+                  'flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors mt-0.5',
+                  completed[s.id] ? 'bg-leaf-600 border-leaf-600 text-white' : 'border-slate-300 hover:border-sycamore-500'
+                ]"
+                :aria-label="completed[s.id] ? 'Mark incomplete' : 'Mark complete'"
+              >
+                <svg v-if="completed[s.id]" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4L8.5 12l6.8-6.8a1 1 0 0 1 1.4 0Z" clip-rule="evenodd" />
+                </svg>
+              </button>
+
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span
+                    class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                    :class="kindMeta[s.content_type || 'task']?.tone || 'bg-slate-100 text-slate-700'"
+                  >{{ kindMeta[s.content_type || 'task']?.label || 'Task' }}</span>
+                  <h3 class="font-semibold text-slate-900">{{ s.title }}</h3>
+                  <span v-if="s.is_required" class="badge badge-amber">Required</span>
+                  <span v-if="s.estimated_minutes" class="text-xs text-slate-400">~{{ s.estimated_minutes }} min</span>
+                </div>
+                <p v-if="s.description" class="text-sm text-slate-600 mt-1.5">{{ s.description }}</p>
+
+                <div v-if="s.content_type === 'video' && toEmbedUrl(s.video_url)" class="mt-4 rounded-lg overflow-hidden border border-slate-200 bg-black">
+                  <div class="aspect-video">
+                    <iframe
+                      :src="toEmbedUrl(s.video_url)!"
+                      class="w-full h-full"
+                      frameborder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowfullscreen
+                    />
+                  </div>
+                </div>
+                <a
+                  v-else-if="s.content_type === 'video' && s.video_url"
+                  :href="s.video_url"
+                  target="_blank"
+                  rel="noopener"
+                  class="mt-3 inline-flex items-center gap-2 text-sm text-sycamore-700 font-medium hover:underline"
+                >
+                  Open video <SidebarIcon name="arrow-right" />
+                </a>
+
+                <div v-if="s.content_type === 'article' && s.body" class="mt-3 prose prose-sm max-w-none text-slate-700 whitespace-pre-line">
+                  {{ s.body }}
+                </div>
+
+                <div v-if="s.content_type === 'module' && s.body" class="mt-3 text-sm text-slate-700 whitespace-pre-line">
+                  {{ s.body }}
+                </div>
+
+                <div v-if="s.onboarding_resources && s.onboarding_resources.length" class="mt-4">
+                  <button
+                    type="button"
+                    class="text-xs font-medium text-sycamore-700 hover:underline inline-flex items-center gap-1"
+                    @click="toggleExpand(s.id)"
+                  >
+                    {{ expanded[s.id] ? 'Hide' : 'Show' }} {{ s.onboarding_resources.length }} resource{{ s.onboarding_resources.length === 1 ? '' : 's' }}
+                  </button>
+                  <ul v-if="expanded[s.id]" class="mt-3 space-y-2">
+                    <li v-for="r in s.onboarding_resources" :key="r.id" class="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span
+                          class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                          :class="kindMeta[r.kind]?.tone || 'bg-slate-100 text-slate-700'"
+                        >{{ kindMeta[r.kind]?.label || r.kind }}</span>
+                        <span class="text-sm font-medium text-slate-900">{{ r.title }}</span>
+                      </div>
+                      <p v-if="r.description" class="text-xs text-slate-600 mt-1">{{ r.description }}</p>
+
+                      <div v-if="r.kind === 'video' && toEmbedUrl(r.url)" class="mt-2 rounded-md overflow-hidden border border-slate-200 bg-black">
+                        <div class="aspect-video">
+                          <iframe :src="toEmbedUrl(r.url)!" class="w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
+                        </div>
+                      </div>
+                      <div v-else-if="r.kind === 'article' && r.body" class="text-sm text-slate-700 whitespace-pre-line mt-2">
+                        {{ r.body }}
+                      </div>
+                      <a
+                        v-else-if="r.url"
+                        :href="r.url"
+                        target="_blank"
+                        rel="noopener"
+                        class="mt-1.5 text-xs text-sycamore-700 font-medium hover:underline inline-flex items-center gap-1"
+                      >
+                        Open resource <SidebarIcon name="arrow-right" />
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+
+                <a
+                  v-if="s.resource_url && s.content_type !== 'video'"
+                  :href="s.resource_url"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-xs text-sycamore-600 hover:underline mt-3 inline-flex items-center gap-1"
+                >
+                  Open primary resource <SidebarIcon name="arrow-right" />
+                </a>
               </div>
-              <p v-if="s.description" class="text-sm text-slate-600 mt-1">{{ s.description }}</p>
-              <a v-if="s.resource_url" :href="s.resource_url" target="_blank" rel="noopener" class="text-xs text-sycamore-600 hover:underline mt-2 inline-flex items-center gap-1">
-                Open resource <SidebarIcon name="arrow-right" />
-              </a>
             </div>
           </article>
         </div>

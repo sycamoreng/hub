@@ -6,8 +6,20 @@ const props = defineProps<{
   targetType: ReactionTargetType
   targetId: string
   summary: ReactionSummary
+  reactorsByEmoji?: Record<string, string[]>
   disabled?: boolean
 }>()
+
+function reactorList(emoji: string): string[] {
+  return props.reactorsByEmoji?.[emoji] ?? []
+}
+
+function reactorTitle(emoji: string): string {
+  const names = reactorList(emoji)
+  if (names.length === 0) return ''
+  if (names.length <= 8) return names.join('\n')
+  return names.slice(0, 8).join('\n') + `\n+${names.length - 8} more`
+}
 
 const emit = defineEmits<{
   (e: 'toggle', payload: { targetType: ReactionTargetType; targetId: string; emoji: ReactionKey; on: boolean }): void
@@ -36,20 +48,36 @@ function pick(emoji: string) {
 
 <template>
   <div ref="rootEl" class="flex flex-wrap items-center gap-1.5 mt-3 relative">
-    <button
+    <span
       v-for="e in summary.order"
       :key="e"
-      type="button"
-      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors"
-      :class="summary.mine.has(e)
-        ? 'bg-sycamore-50 border-sycamore-300 text-sycamore-700'
-        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'"
-      :disabled="disabled"
-      @click="pick(e)"
+      class="relative group/reactor"
     >
-      <span class="text-base leading-none">{{ e }}</span>
-      <span class="text-[11px] text-slate-500">{{ summary.counts[e] || 0 }}</span>
-    </button>
+      <button
+        type="button"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors"
+        :class="summary.mine.has(e)
+          ? 'bg-sycamore-50 border-sycamore-300 text-sycamore-700'
+          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'"
+        :disabled="disabled"
+        :title="reactorTitle(e)"
+        @click="pick(e)"
+      >
+        <span class="text-base leading-none">{{ e }}</span>
+        <span class="text-[11px] text-slate-500">{{ summary.counts[e] || 0 }}</span>
+      </button>
+      <span
+        v-if="reactorList(e).length"
+        class="pointer-events-none absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/reactor:block"
+      >
+        <span class="block whitespace-nowrap max-w-xs bg-slate-900 text-white text-[11px] rounded-lg px-2.5 py-1.5 shadow-lg">
+          <span class="block font-semibold mb-0.5">{{ e }} {{ reactorList(e).length }}</span>
+          <span v-for="(name, i) in reactorList(e).slice(0, 8)" :key="i" class="block">{{ name }}</span>
+          <span v-if="reactorList(e).length > 8" class="block text-slate-300">+{{ reactorList(e).length - 8 }} more</span>
+        </span>
+        <span class="block w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1"></span>
+      </span>
+    </span>
 
     <button
       type="button"

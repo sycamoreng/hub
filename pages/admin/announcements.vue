@@ -2,6 +2,7 @@
 definePageMeta({ layout: 'admin', middleware: ['auth'] })
 
 const { items, loading, load, create, update, remove } = useCrud('announcements')
+const toast = useToast()
 
 const editorOpen = ref(false)
 const editing = ref<any | null>(null)
@@ -9,7 +10,9 @@ const saving = ref(false)
 
 const fields = [
   { key: 'title', label: 'Title', required: true, placeholder: 'e.g. New office grand opening' },
-  { key: 'content', label: 'Content', type: 'textarea', required: true, placeholder: 'What do you want to announce?' },
+  { key: 'summary', label: 'Summary / standfirst', placeholder: 'Short dek shown under the title', hint: 'Optional. Adds a press-style subheading.' },
+  { key: 'content', label: 'Content', type: 'textarea', required: true, mention: true, placeholder: 'What do you want to announce? Type @ to mention a colleague.' },
+  { key: 'image_url', label: 'Hero image URL', placeholder: 'https://...', hint: 'Optional. Wide hero photo shown above the headline.' },
   {
     key: 'priority', label: 'Priority', type: 'select', required: true,
     options: [
@@ -43,6 +46,8 @@ async function save(payload: Record<string, any>) {
     const data: any = {
       title: payload.title,
       content: payload.content,
+      summary: payload.summary ?? '',
+      image_url: payload.image_url || null,
       priority: payload.priority,
       is_active: !!payload.is_active,
       expires_at: payload.expires_at ? new Date(payload.expires_at).toISOString() : null
@@ -51,15 +56,16 @@ async function save(payload: Record<string, any>) {
     else await create(data)
     editorOpen.value = false
   } catch (e: any) {
-    alert(e.message ?? 'Failed to save')
+    toast.error(e.message ?? 'Failed to save')
   } finally {
     saving.value = false
   }
 }
 
 async function del(row: any) {
-  if (!confirm(`Delete "${row.title}"?`)) return
-  try { await remove(row.id) } catch (e: any) { alert(e.message ?? 'Failed to delete') }
+  const ok = await toast.confirm({ title: 'Delete', message: `Delete "${row.title}"?` + ' This cannot be undone.', variant: 'danger', confirmLabel: 'Delete' })
+  if (!ok) return
+  try { await remove(row.id); toast.success('Deleted') } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
 }
 </script>
 

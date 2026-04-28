@@ -44,7 +44,8 @@ const emit = defineEmits<{
               <div class="truncate" :class="{ 'font-medium text-slate-900': c.key === columns[0].key }">{{ c.render ? c.render(row) : row[c.key] }}</div>
             </div>
           </div>
-          <div class="flex gap-1 shrink-0">
+          <div class="flex items-center gap-2 shrink-0">
+            <slot name="row-actions" :row="row" />
             <button class="p-2 rounded-lg hover:bg-sycamore-50 text-slate-600 hover:text-sycamore-700" @click="emit('edit', row)" aria-label="Edit"><SidebarIcon name="edit" /></button>
             <button class="p-2 rounded-lg hover:bg-rose-50 text-slate-600 hover:text-rose-700" @click="emit('delete', row)" aria-label="Delete"><SidebarIcon name="trash" /></button>
           </div>

@@ -12,6 +12,8 @@ export interface ReactionRow {
   created_at: string
 }
 
+export type PostKind = 'standard' | 'birthday' | 'anniversary' | 'mood' | 'milestone' | 'kudos' | 'welcome' | 'congrats'
+
 export interface PostRow {
   id: string
   author_id: string
@@ -19,6 +21,104 @@ export interface PostRow {
   is_published: boolean
   created_at: string
   updated_at: string
+  image_url?: string
+  post_kind?: PostKind
+  template_data?: Record<string, any>
+}
+
+export interface PostTemplateMeta {
+  kind: PostKind
+  label: string
+  emoji: string
+  promptTitle: string
+  fieldHint?: string
+  defaultText: (data: Record<string, any>) => string
+  badge: string
+  accent: string
+  fields?: { key: string; label: string; placeholder?: string; type?: 'text' | 'number' | 'date' }[]
+}
+
+export const POST_TEMPLATES: PostTemplateMeta[] = [
+  {
+    kind: 'birthday',
+    label: 'Birthday',
+    emoji: '\u{1F382}',
+    promptTitle: 'Celebrate a birthday',
+    badge: 'Birthday',
+    accent: 'from-rose-500 to-amber-500',
+    fields: [{ key: 'name', label: 'Whose birthday?', placeholder: 'e.g. Tomi (or yourself)' }],
+    defaultText: d => `It\u2019s ${d.name || 'someone\u2019s'} birthday today! Wishing you an amazing year ahead. \u{1F382}\u{1F389}`
+  },
+  {
+    kind: 'anniversary',
+    label: 'Work anniversary',
+    emoji: '\u{1F38A}',
+    promptTitle: 'Celebrate a work anniversary',
+    badge: 'Anniversary',
+    accent: 'from-sycamore-500 to-leaf-600',
+    fields: [
+      { key: 'name', label: 'Who?', placeholder: 'e.g. Tomi' },
+      { key: 'years', label: 'Years at Sycamore', type: 'number', placeholder: '5' }
+    ],
+    defaultText: d => `Today marks ${d.years || 'an awesome'} year${(Number(d.years) === 1 ? '' : 's')} of ${d.name || 'someone'} at Sycamore. Thank you for everything!`
+  },
+  {
+    kind: 'mood',
+    label: 'Mood / vibe',
+    emoji: '\u{1F60A}',
+    promptTitle: 'Share how you\u2019re feeling',
+    badge: 'Mood',
+    accent: 'from-amber-400 to-rose-400',
+    fields: [{ key: 'mood', label: 'Mood emoji', placeholder: 'e.g. \u{1F60A} excited' }],
+    defaultText: d => `${d.mood || 'Feeling great'} \u2014 ${'.'}`
+  },
+  {
+    kind: 'milestone',
+    label: 'Milestone',
+    emoji: '\u{1F3C6}',
+    promptTitle: 'Share a milestone',
+    badge: 'Milestone',
+    accent: 'from-leaf-500 to-sycamore-700',
+    defaultText: () => `Just hit a big milestone \u{1F3C6}`
+  },
+  {
+    kind: 'kudos',
+    label: 'Kudos',
+    emoji: '\u{1F44F}',
+    promptTitle: 'Give a shout-out',
+    badge: 'Kudos',
+    accent: 'from-sycamore-400 to-amber-400',
+    fields: [{ key: 'name', label: 'To whom?', placeholder: '@colleague' }],
+    defaultText: d => `Massive shout-out to ${d.name || 'someone special'} \u2014 thank you for going above and beyond.`
+  },
+  {
+    kind: 'welcome',
+    label: 'Welcome',
+    emoji: '\u{1F44B}',
+    promptTitle: 'Welcome a new hire',
+    badge: 'Welcome',
+    accent: 'from-sycamore-500 to-leaf-500',
+    fields: [
+      { key: 'name', label: 'Who joined?', placeholder: 'e.g. Tomi' },
+      { key: 'role', label: 'Role', placeholder: 'e.g. Senior Engineer' }
+    ],
+    defaultText: d => `Please join me in welcoming ${d.name || 'our newest teammate'}${d.role ? ` as our new ${d.role}` : ''} to Sycamore! \u{1F44B}`
+  },
+  {
+    kind: 'congrats',
+    label: 'Congrats',
+    emoji: '\u{1F389}',
+    promptTitle: 'Send congratulations',
+    badge: 'Congrats',
+    accent: 'from-rose-500 to-sycamore-600',
+    fields: [{ key: 'name', label: 'Who?', placeholder: 'e.g. Tomi' }],
+    defaultText: d => `Huge congrats to ${d.name || 'you'}! Well-deserved \u{1F389}`
+  }
+]
+
+export function findTemplate(kind?: string | null): PostTemplateMeta | null {
+  if (!kind || kind === 'standard') return null
+  return POST_TEMPLATES.find(t => t.kind === kind) ?? null
 }
 
 export interface PostMention {
@@ -96,13 +196,21 @@ export function useFeed() {
     return (data ?? []) as PostRow[]
   }
 
-  async function createPost(authorId: string, content: string): Promise<PostRow> {
+  async function createPost(
+    authorId: string,
+    content: string,
+    options?: { image_url?: string; post_kind?: PostKind; template_data?: Record<string, any> }
+  ): Promise<PostRow> {
     const trimmed = content.trim()
     if (!trimmed) throw new Error('Post is empty')
     if (trimmed.length > 4000) throw new Error('Post is too long (max 4000 characters)')
+    const insert: any = { author_id: authorId, content: trimmed, is_published: true }
+    if (options?.image_url) insert.image_url = options.image_url
+    if (options?.post_kind && options.post_kind !== 'standard') insert.post_kind = options.post_kind
+    if (options?.template_data) insert.template_data = options.template_data
     const { data, error } = await supabase
       .from('posts')
-      .insert({ author_id: authorId, content: trimmed, is_published: true })
+      .insert(insert)
       .select('*')
       .maybeSingle()
     if (error) throw error
@@ -179,5 +287,26 @@ export function useFeed() {
     return map
   }
 
-  return { fetchPosts, createPost, deletePost, fetchReactions, toggleReaction, fetchMentionsForPosts }
+  async function fetchMentionsForAnnouncements(ids: string[]): Promise<Record<string, PostMention[]>> {
+    if (ids.length === 0) return {}
+    const { data, error } = await supabase
+      .from('announcement_mentions')
+      .select('announcement_id, user_id, staff_id, staff_members(full_name)')
+      .in('announcement_id', ids)
+    if (error) throw error
+    const map: Record<string, PostMention[]> = {}
+    for (const row of (data ?? []) as any[]) {
+      const m: PostMention = {
+        post_id: row.announcement_id,
+        user_id: row.user_id,
+        staff_id: row.staff_id,
+        full_name: row.staff_members?.full_name ?? ''
+      }
+      if (!m.full_name) continue
+      ;(map[row.announcement_id] ||= []).push(m)
+    }
+    return map
+  }
+
+  return { fetchPosts, createPost, deletePost, fetchReactions, toggleReaction, fetchMentionsForPosts, fetchMentionsForAnnouncements }
 }

@@ -2,6 +2,7 @@
 definePageMeta({ layout: 'admin', middleware: ['auth'] })
 
 const { items, loading, load, create, update, remove } = useCrud('company_info')
+const toast = useToast()
 const editorOpen = ref(false)
 const editing = ref<any | null>(null)
 const saving = ref(false)
@@ -39,13 +40,14 @@ async function save(payload: Record<string, any>) {
     const data = { info_key: payload.info_key, info_value: payload.info_value, category: payload.category || 'general', display_order: Number(payload.display_order) || 0 }
     if (editing.value?.id) await update(editing.value.id, { ...data, updated_at: new Date().toISOString() }); else await create(data)
     editorOpen.value = false
-  } catch (e: any) { alert(e.message ?? 'Failed to save') }
+  } catch (e: any) { toast.error(e.message ?? 'Failed to save') }
   finally { saving.value = false }
 }
 
 async function del(row: any) {
-  if (!confirm(`Delete "${row.info_key}"?`)) return
-  try { await remove(row.id) } catch (e: any) { alert(e.message ?? 'Failed to delete') }
+  const ok = await toast.confirm({ title: 'Delete', message: `Delete "${row.info_key}"?` + ' This cannot be undone.', variant: 'danger', confirmLabel: 'Delete' })
+  if (!ok) return
+  try { await remove(row.id); toast.success('Deleted') } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
 }
 </script>
 

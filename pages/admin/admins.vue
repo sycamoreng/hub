@@ -1,5 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'admin', middleware: ['auth'] })
+
+const toast = useToast()
 import { useSupabase } from '~/utils/supabase'
 import type { CrudAction, SectionPermissions } from '~/composables/useAuth'
 
@@ -190,7 +192,8 @@ async function removeAdmin(row: AdminRow) {
       return
     }
   }
-  if (!confirm(`Remove admin access for ${row.email}?`)) return
+  const ok = await toast.confirm({ title: 'Delete', message: `Remove admin access for ${row.email}?` + ' This cannot be undone.', variant: 'danger', confirmLabel: 'Delete' })
+  if (!ok) return
   const { error: e } = await supabase.from('admin_users').delete().eq('email', row.email)
   if (e) {
     error.value = e.message
