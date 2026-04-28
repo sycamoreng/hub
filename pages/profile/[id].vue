@@ -5,7 +5,7 @@ const route = useRoute()
 const staffId = computed(() => String(route.params.id))
 
 const { fetchStaffById, fetchProfile } = useProfile()
-const { user } = useAuth()
+const { user, profileSyncTick } = useAuth()
 
 const loading = ref(true)
 const staff = ref<any | null>(null)
@@ -38,10 +38,20 @@ async function load() {
   loading.value = false
 }
 
-watch(staffId, load, { immediate: true })
+watch([staffId, user, () => profileSyncTick.value], load, { immediate: true })
+
+const ownAuthAvatar = computed(() => {
+  if (!user.value || !staff.value || user.value.id !== staff.value.auth_user_id) return ''
+  const meta: any = user.value.user_metadata ?? {}
+  return (meta.avatar_url || meta.picture || '').trim()
+})
+
+const headerAvatar = computed(() => profile.value?.avatar_url || ownAuthAvatar.value)
 
 const theme = computed(() => profile.value?.theme || 'sycamore')
 const gradient = computed(() => getThemeGradient(theme.value))
+
+const claimed = computed(() => !!staff.value?.auth_user_id)
 
 const socials = computed(() => {
   const p = profile.value
@@ -66,6 +76,30 @@ const initials = computed(() => {
     .map((s: string) => s[0]?.toUpperCase() ?? '')
     .join('') || '?'
 })
+
+const tenure = computed(() => {
+  const j = staff.value?.joined_date
+  if (!j) return null
+  const start = new Date(j)
+  if (Number.isNaN(start.getTime())) return null
+  const now = new Date()
+  let years = now.getFullYear() - start.getFullYear()
+  let months = now.getMonth() - start.getMonth()
+  if (now.getDate() < start.getDate()) months -= 1
+  if (months < 0) { years -= 1; months += 12 }
+  let label: string
+  if (years <= 0 && months <= 0) label = 'Just joined'
+  else if (years <= 0) label = `${months} mo`
+  else if (months <= 0) label = `${years} yr`
+  else label = `${years} yr ${months} mo`
+  const formatted = start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  return { formatted, label }
+})
+
+const googleChatUrl = computed(() => {
+  if (!claimed.value || !staff.value?.email) return null
+  return `https://mail.google.com/chat/u/0/#chat/dm/${encodeURIComponent(staff.value.email)}`
+})
 </script>
 
 <template>
@@ -84,23 +118,49 @@ const initials = computed(() => {
     <template v-else>
       <div :class="['rounded-2xl p-6 sm:p-8 text-white relative overflow-hidden bg-gradient-to-br', gradient]">
         <div class="flex items-center gap-4 relative z-10">
-          <div class="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-2xl font-semibold">
+          <img
+            v-if="headerAvatar"
+            :src="headerAvatar"
+            :alt="staff.full_name"
+            referrerpolicy="no-referrer"
+            class="w-20 h-20 rounded-full object-cover border-2 border-white/30"
+          />
+          <div v-else class="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-2xl font-semibold">
             {{ initials }}
           </div>
           <div class="min-w-0">
-            <div class="text-2xl sm:text-3xl font-bold tracking-tight">{{ staff.full_name }}</div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="text-2xl sm:text-3xl font-bold tracking-tight">{{ staff.full_name }}</div>
+              <span
+                v-if="claimed"
+                class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/20 text-white"
+                title="This staff member has signed in and claimed their profile"
+              >
+                <SidebarIcon name="check" /> Claimed
+              </span>
+            </div>
             <div class="text-sm text-white/85 mt-0.5">{{ staff.role || 'Sycamore' }}</div>
             <div class="text-xs text-white/70 mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
               <span v-if="departmentName">{{ departmentName }}</span>
               <span v-if="locationName">{{ locationName }}</span>
+              <span v-if="tenure">Joined {{ tenure.formatted }} &middot; {{ tenure.label }}</span>
             </div>
           </div>
         </div>
         <div class="absolute -right-16 -bottom-16 w-72 h-72 rounded-full bg-white/5" />
-        <div v-if="isOwn" class="relative z-10 mt-4">
-          <NuxtLink to="/profile" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-medium">
+        <div class="relative z-10 mt-4 flex flex-wrap gap-2">
+          <NuxtLink v-if="isOwn" to="/profile" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-medium">
             <SidebarIcon name="edit" /> Edit my profile
           </NuxtLink>
+          <a
+            v-if="googleChatUrl && !isOwn"
+            :href="googleChatUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-slate-800 hover:bg-white/90 text-xs font-medium"
+          >
+            <SidebarIcon name="chat" /> Chat on Google
+          </a>
         </div>
       </div>
 
@@ -122,6 +182,9 @@ const initials = computed(() => {
             <div v-if="staff.phone" class="flex items-center gap-2 text-slate-700">
               <SidebarIcon name="phone" />
               <span>{{ staff.phone }}</span>
+            </div>
+            <div v-if="!claimed" class="text-xs text-slate-400 italic pt-1">
+              This colleague has not signed into the hub yet, so Google Chat is unavailable.
             </div>
           </div>
 

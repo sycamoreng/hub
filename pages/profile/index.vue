@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { PROFILE_THEMES, getThemeGradient, type UserProfile } from '~/composables/useProfile'
 
-const { user, profile, ready } = useAuth()
+const { user, profile, ready, profileSyncTick } = useAuth()
 const { ensureOwnProfile, saveOwnProfile, fetchStaffByAuthUser } = useProfile()
 
 const loading = ref(true)
@@ -16,8 +16,10 @@ async function load() {
   loading.value = true
   error.value = null
   try {
+    const meta: any = user.value.user_metadata ?? {}
+    const authAvatar = (meta.avatar_url || meta.picture || '').trim()
     const [p, s] = await Promise.all([
-      ensureOwnProfile(user.value.id),
+      ensureOwnProfile(user.value.id, authAvatar),
       fetchStaffByAuthUser(user.value.id)
     ])
     data.value = p
@@ -29,7 +31,7 @@ async function load() {
   }
 }
 
-watch([ready, user], () => { if (ready.value) load() }, { immediate: true })
+watch([ready, user, () => profileSyncTick.value], () => { if (ready.value) load() }, { immediate: true })
 
 async function save() {
   if (!data.value) return
@@ -67,9 +69,9 @@ definePageMeta({ title: 'My Profile' })
       <div :class="['rounded-2xl p-6 sm:p-8 text-white relative overflow-hidden bg-gradient-to-br', getThemeGradient(data.theme)]">
         <div class="flex items-center gap-4 relative z-10">
           <img
-            v-if="profile?.avatarUrl"
-            :src="profile.avatarUrl"
-            :alt="profile.name"
+            v-if="data.avatar_url || profile?.avatarUrl"
+            :src="data.avatar_url || profile?.avatarUrl"
+            :alt="profile?.name"
             referrerpolicy="no-referrer"
             class="w-16 h-16 rounded-full object-cover border-2 border-white/30"
           />

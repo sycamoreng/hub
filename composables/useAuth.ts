@@ -29,6 +29,7 @@ export function useAuth() {
   const user = useState<User | null>('auth.user', () => null)
   const adminRecord = useState<AdminRecord | null>('auth.adminRecord', () => null)
   const ready = useState<boolean>('auth.ready', () => false)
+  const profileSyncTick = useState<number>('auth.profileSyncTick', () => 0)
   const domainError = useState<string | null>('auth.domainError', () => null)
 
   async function loadAdminRecord(email: string | undefined) {
@@ -67,6 +68,37 @@ export function useAuth() {
       await supabase.rpc('claim_staff_member')
     } catch {
       /* non-fatal: staff record may not exist yet */
+    } finally {
+      profileSyncTick.value++
+    }
+  }
+
+  async function syncAvatar(currentUser: User | null) {
+    if (!currentUser) return
+    const meta: any = currentUser.user_metadata ?? {}
+    const avatar = (meta.avatar_url || meta.picture || '').trim()
+    if (!avatar) return
+    try {
+      const { fetchProfile } = useProfile()
+      const existing = await fetchProfile(currentUser.id)
+      if (existing && existing.avatar_url === avatar) return
+      const next = {
+        user_id: currentUser.id,
+        bio: existing?.bio ?? '',
+        theme: existing?.theme ?? 'sycamore',
+        avatar_url: avatar,
+        linkedin_url: existing?.linkedin_url ?? '',
+        twitter_url: existing?.twitter_url ?? '',
+        github_url: existing?.github_url ?? '',
+        website_url: existing?.website_url ?? '',
+        instagram_url: existing?.instagram_url ?? '',
+        updated_at: new Date().toISOString()
+      }
+      await supabase.from('user_profiles').upsert(next, { onConflict: 'user_id' })
+    } catch {
+      /* non-fatal */
+    } finally {
+      profileSyncTick.value++
     }
   }
 
@@ -77,7 +109,10 @@ export function useAuth() {
     const ok = await enforceAllowedDomain(user.value)
     if (ok) {
       await loadAdminRecord(user.value?.email)
-      if (user.value) await claimStaff()
+      if (user.value) {
+        await claimStaff()
+        await syncAvatar(user.value)
+      }
     }
     supabase.auth.onAuthStateChange((_event, session) => {
       user.value = session?.user ?? null
@@ -86,7 +121,10 @@ export function useAuth() {
         if (allowed) {
           domainError.value = null
           await loadAdminRecord(user.value?.email)
-          if (user.value) await claimStaff()
+          if (user.value) {
+            await claimStaff()
+            await syncAvatar(user.value)
+          }
         }
       })()
     })
@@ -143,6 +181,7 @@ export function useAuth() {
   return {
     user: readonly(user),
     ready: readonly(ready),
+    profileSyncTick: readonly(profileSyncTick),
     profile,
     adminRecord: readonly(adminRecord),
     isAuthenticated: computed(() => user.value !== null),

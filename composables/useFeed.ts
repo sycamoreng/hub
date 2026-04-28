@@ -21,6 +21,13 @@ export interface PostRow {
   updated_at: string
 }
 
+export interface PostMention {
+  post_id: string
+  user_id: string
+  staff_id: string | null
+  full_name: string
+}
+
 export interface ReactionSummary {
   counts: Record<string, number>
   mine: Set<string>
@@ -151,5 +158,26 @@ export function useFeed() {
     }
   }
 
-  return { fetchPosts, createPost, deletePost, fetchReactions, toggleReaction }
+  async function fetchMentionsForPosts(postIds: string[]): Promise<Record<string, PostMention[]>> {
+    if (postIds.length === 0) return {}
+    const { data, error } = await supabase
+      .from('post_mentions')
+      .select('post_id, user_id, staff_id, staff_members(full_name)')
+      .in('post_id', postIds)
+    if (error) throw error
+    const map: Record<string, PostMention[]> = {}
+    for (const row of (data ?? []) as any[]) {
+      const m: PostMention = {
+        post_id: row.post_id,
+        user_id: row.user_id,
+        staff_id: row.staff_id,
+        full_name: row.staff_members?.full_name ?? ''
+      }
+      if (!m.full_name) continue
+      ;(map[m.post_id] ||= []).push(m)
+    }
+    return map
+  }
+
+  return { fetchPosts, createPost, deletePost, fetchReactions, toggleReaction, fetchMentionsForPosts }
 }

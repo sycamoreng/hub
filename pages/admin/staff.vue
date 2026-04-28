@@ -33,6 +33,7 @@ const columns = [
   { key: 'full_name', label: 'Name' },
   { key: 'role', label: 'Role' },
   { key: 'email', label: 'Email' },
+  { key: 'auth_user_id', label: 'Profile', render: (r: any) => r.auth_user_id ? 'Claimed' : 'Pending' },
   { key: 'is_active', label: 'Active', render: (r: any) => r.is_active ? 'Yes' : 'No' }
 ]
 

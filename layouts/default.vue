@@ -100,6 +100,9 @@ async function handleSignOut() {
         </div>
         <div class="flex items-center gap-2">
           <ClientOnly>
+          <NotificationsBell v-if="isAuthenticated" />
+          </ClientOnly>
+          <ClientOnly>
           <NuxtLink v-if="isAuthenticated && profile" to="/admin" class="hidden sm:block">
             <img
               v-if="profile.avatarUrl && avatarOk"
@@ -120,6 +123,11 @@ async function handleSignOut() {
           </button>
         </div>
       </header>
+      <div class="hidden lg:flex sticky top-0 z-20 h-14 bg-white/80 backdrop-blur border-b border-slate-200 px-6 items-center justify-end">
+        <ClientOnly>
+          <NotificationsBell v-if="isAuthenticated" />
+        </ClientOnly>
+      </div>
       <main class="flex-1 p-4 sm:p-6 lg:p-10">
         <slot />
       </main>

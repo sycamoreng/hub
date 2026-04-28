@@ -1,5 +1,11 @@
 <script setup lang="ts">
+import { useSupabase } from '~/utils/supabase'
+
 const { fetchCompanyInfo, fetchDepartments, fetchLocations, fetchStaff, fetchAnnouncements, fetchHolidaysEvents } = useCompanyData()
+const { fetchPosts } = useFeed()
+const { fetchProfilesByUserIds } = useProfile()
+
+const supabase = useSupabase()
 
 const companyInfo = ref<any[]>([])
 const departments = ref<any[]>([])
@@ -7,12 +13,15 @@ const locations = ref<any[]>([])
 const staff = ref<any[]>([])
 const announcements = ref<any[]>([])
 const events = ref<any[]>([])
+const recentPosts = ref<any[]>([])
+const postAuthors = ref<Record<string, { name: string; staff_id: string | null; avatar: string | null }>>({})
 const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const [c, d, l, s, a, e] = await Promise.all([
-      fetchCompanyInfo(), fetchDepartments(), fetchLocations(), fetchStaff(), fetchAnnouncements(), fetchHolidaysEvents()
+    const [c, d, l, s, a, e, p] = await Promise.all([
+      fetchCompanyInfo(), fetchDepartments(), fetchLocations(), fetchStaff(),
+      fetchAnnouncements(), fetchHolidaysEvents(), fetchPosts(5)
     ])
     companyInfo.value = c
     departments.value = d
@@ -20,10 +29,50 @@ onMounted(async () => {
     staff.value = s
     announcements.value = a
     events.value = e
+    recentPosts.value = p
+
+    const uids = p.map(x => x.author_id)
+    if (uids.length) {
+      const [{ data: staffRows }, profiles] = await Promise.all([
+        supabase.from('staff_members').select('id, full_name, auth_user_id').in('auth_user_id', uids),
+        fetchProfilesByUserIds(uids)
+      ])
+      const map: typeof postAuthors.value = {}
+      for (const uid of uids) {
+        const sm = (staffRows ?? []).find((r: any) => r.auth_user_id === uid)
+        map[uid] = {
+          name: sm?.full_name || 'Sycamore staff',
+          staff_id: sm?.id ?? null,
+          avatar: profiles[uid]?.avatar_url || null
+        }
+      }
+      postAuthors.value = map
+    }
   } finally {
     loading.value = false
   }
 })
+
+function postInitials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase() ?? '').join('') || '?'
+}
+
+function snippet(text: string, len = 160) {
+  const t = (text || '').trim()
+  return t.length > len ? `${t.slice(0, len)}...` : t
+}
+
+function relativeTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
 
 const infoMap = computed(() => {
   const m: Record<string, string> = {}
@@ -136,6 +185,52 @@ function formatDate(d: string) {
           </li>
         </ul>
       </div>
+    </div>
+
+    <div class="card p-6">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900">Recent from the team</h2>
+          <p class="text-sm text-slate-500">Latest posts from your colleagues</p>
+        </div>
+        <NuxtLink to="/feed" class="text-xs text-sycamore-700 font-medium hover:underline inline-flex items-center gap-1">
+          View feed <SidebarIcon name="arrow-right" />
+        </NuxtLink>
+      </div>
+      <div v-if="loading" class="text-sm text-slate-400">Loading...</div>
+      <div v-else-if="recentPosts.length === 0" class="text-sm text-slate-400">No posts yet. Be the first to share something on the feed.</div>
+      <ul v-else class="space-y-3">
+        <li v-for="p in recentPosts" :key="p.id" class="flex gap-3 p-3 rounded-lg hover:bg-slate-50">
+          <component
+            :is="postAuthors[p.author_id]?.staff_id ? resolveComponent('NuxtLink') : 'div'"
+            :to="postAuthors[p.author_id]?.staff_id ? `/profile/${postAuthors[p.author_id]?.staff_id}` : undefined"
+            class="flex-shrink-0"
+          >
+            <img
+              v-if="postAuthors[p.author_id]?.avatar"
+              :src="postAuthors[p.author_id]?.avatar!"
+              :alt="postAuthors[p.author_id]?.name"
+              referrerpolicy="no-referrer"
+              class="w-10 h-10 rounded-full object-cover border border-slate-200"
+            />
+            <div v-else class="w-10 h-10 rounded-full bg-sycamore-100 text-sycamore-700 flex items-center justify-center text-sm font-semibold">
+              {{ postInitials(postAuthors[p.author_id]?.name || '?') }}
+            </div>
+          </component>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 text-sm">
+              <NuxtLink
+                v-if="postAuthors[p.author_id]?.staff_id"
+                :to="`/profile/${postAuthors[p.author_id]?.staff_id}`"
+                class="font-semibold text-slate-900 hover:text-sycamore-700 truncate"
+              >{{ postAuthors[p.author_id]?.name }}</NuxtLink>
+              <span v-else class="font-semibold text-slate-900 truncate">{{ postAuthors[p.author_id]?.name || 'Sycamore staff' }}</span>
+              <span class="text-xs text-slate-400">{{ relativeTime(p.created_at) }}</span>
+            </div>
+            <p class="text-sm text-slate-600 mt-0.5">{{ snippet(p.content) }}</p>
+          </div>
+        </li>
+      </ul>
     </div>
 
     <div class="card p-6">

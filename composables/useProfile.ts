@@ -4,6 +4,7 @@ export interface UserProfile {
   user_id: string
   bio: string
   theme: string
+  avatar_url: string
   linkedin_url: string
   twitter_url: string
   github_url: string
@@ -38,6 +39,7 @@ const EMPTY_PROFILE = (userId: string): UserProfile => ({
   user_id: userId,
   bio: '',
   theme: 'sycamore',
+  avatar_url: '',
   linkedin_url: '',
   twitter_url: '',
   github_url: '',
@@ -58,17 +60,28 @@ export function useProfile() {
     return (data as UserProfile) ?? null
   }
 
-  async function ensureOwnProfile(userId: string): Promise<UserProfile> {
+  async function ensureOwnProfile(userId: string, initialAvatarUrl = ''): Promise<UserProfile> {
     const existing = await fetchProfile(userId)
-    if (existing) return existing
-    const empty = EMPTY_PROFILE(userId)
+    if (existing) {
+      if (initialAvatarUrl && existing.avatar_url !== initialAvatarUrl) {
+        const { data } = await supabase
+          .from('user_profiles')
+          .update({ avatar_url: initialAvatarUrl, updated_at: new Date().toISOString() })
+          .eq('user_id', userId)
+          .select('*')
+          .maybeSingle()
+        return (data as UserProfile) ?? { ...existing, avatar_url: initialAvatarUrl }
+      }
+      return existing
+    }
+    const seed = { ...EMPTY_PROFILE(userId), avatar_url: initialAvatarUrl }
     const { data, error } = await supabase
       .from('user_profiles')
-      .insert(empty)
+      .insert(seed)
       .select('*')
       .maybeSingle()
     if (error) throw error
-    return (data as UserProfile) ?? empty
+    return (data as UserProfile) ?? seed
   }
 
   async function saveOwnProfile(profile: UserProfile): Promise<UserProfile> {
@@ -100,5 +113,35 @@ export function useProfile() {
     return data
   }
 
-  return { fetchProfile, ensureOwnProfile, saveOwnProfile, fetchStaffByAuthUser, fetchStaffById }
+  async function fetchProfilesByUserIds(ids: string[]): Promise<Record<string, UserProfile>> {
+    const unique = Array.from(new Set(ids.filter(Boolean)))
+    if (unique.length === 0) return {}
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .in('user_id', unique)
+    if (error) throw error
+    const map: Record<string, UserProfile> = {}
+    for (const row of (data ?? []) as UserProfile[]) map[row.user_id] = row
+    return map
+  }
+
+  async function syncAvatarFromAuth(userId: string, avatarUrl: string | null | undefined) {
+    const url = (avatarUrl || '').trim()
+    if (!url) return
+    const existing = await fetchProfile(userId)
+    if (existing && existing.avatar_url === url) return
+    const next = { ...(existing ?? EMPTY_PROFILE(userId)), avatar_url: url, updated_at: new Date().toISOString() }
+    await supabase.from('user_profiles').upsert(next, { onConflict: 'user_id' })
+  }
+
+  return {
+    fetchProfile,
+    ensureOwnProfile,
+    saveOwnProfile,
+    fetchStaffByAuthUser,
+    fetchStaffById,
+    fetchProfilesByUserIds,
+    syncAvatarFromAuth
+  }
 }
