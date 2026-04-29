@@ -50,6 +50,8 @@ function openEdit(row: any) {
   editorOpen.value = true
 }
 
+const SYNCED_FIELDS = ['full_name', 'email', 'phone', 'department_id', 'joined_date', 'is_active'] as const
+
 async function save(payload: Record<string, any>) {
   saving.value = true
   try {
@@ -58,8 +60,28 @@ async function save(payload: Record<string, any>) {
       department_id: payload.department_id || null, location_id: payload.location_id || null,
       joined_date: payload.joined_date || null, bio: payload.bio ?? '', is_active: !!payload.is_active
     }
-    if (editing.value?.id) await update(editing.value.id, data)
-    else await create(data)
+    let staffId = editing.value?.id
+    if (staffId) {
+      await update(staffId, data)
+    } else {
+      const created = await create(data)
+      staffId = created?.id
+    }
+    if (staffId) {
+      const prev = editing.value?.id ? editing.value : {}
+      const changed: string[] = []
+      for (const f of SYNCED_FIELDS) {
+        const before = prev?.[f] ?? null
+        const after = (data as any)[f] ?? null
+        if (before !== after) changed.push(f)
+      }
+      if (changed.length) {
+        await supabase.from('staff_member_locks').upsert(
+          changed.map(field => ({ staff_member_id: staffId, field })),
+          { onConflict: 'staff_member_id,field' }
+        )
+      }
+    }
     editorOpen.value = false
   } catch (e: any) { toast.error(e.message ?? 'Failed to save') }
   finally { saving.value = false }

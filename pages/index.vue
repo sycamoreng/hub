@@ -5,8 +5,12 @@ import { findTemplate } from '~/composables/useFeed'
 const { fetchCompanyInfo, fetchDepartments, fetchLocations, fetchStaff, fetchAnnouncements, fetchHolidaysEvents } = useCompanyData()
 const { fetchPosts, fetchMentionsForPosts, fetchMentionsForAnnouncements } = useFeed()
 const { fetchProfilesByUserIds } = useProfile()
+const { user, isAdmin } = useAuth()
 
 const supabase = useSupabase()
+
+const quickTools = ref<any[]>([])
+const userDepartment = ref<string | null>(null)
 
 const companyInfo = ref<any[]>([])
 const departments = ref<any[]>([])
@@ -22,10 +26,16 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const [c, d, l, s, a, e, p] = await Promise.all([
+    const [c, d, l, s, a, e, p, qt, userDept] = await Promise.all([
       fetchCompanyInfo(), fetchDepartments(), fetchLocations(), fetchStaff(),
-      fetchAnnouncements(), fetchHolidaysEvents(), fetchPosts(6)
+      fetchAnnouncements(), fetchHolidaysEvents(), fetchPosts(6),
+      supabase.from('quick_tools').select('*').eq('is_active', true).order('sort_order').order('name'),
+      user.value
+        ? supabase.from('staff_members').select('departments(name)').eq('auth_user_id', user.value.id).maybeSingle()
+        : Promise.resolve({ data: null })
     ])
+    quickTools.value = qt.data ?? []
+    userDepartment.value = (userDept.data as any)?.departments?.name ?? null
     companyInfo.value = c
     departments.value = d
     locations.value = l
@@ -120,6 +130,17 @@ function formatDate(d: string) {
 function postTpl(t: string | undefined | null) {
   return findTemplate(t)
 }
+
+const visibleQuickTools = computed(() => {
+  const dept = userDepartment.value
+  const admin = isAdmin.value
+  return quickTools.value.filter(t => {
+    const allowed: string[] = t.allowed_departments ?? []
+    if (!allowed || allowed.length === 0) return true
+    if (admin) return true
+    return dept ? allowed.includes(dept) : false
+  })
+})
 </script>
 
 <template>
@@ -318,6 +339,42 @@ function postTpl(t: string | undefined | null) {
             </div>
           </div>
         </article>
+      </div>
+    </section>
+
+    <section v-if="visibleQuickTools.length">
+      <div class="flex items-end justify-between mb-5">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Quick access</h2>
+          <p class="text-sm text-slate-500">Jump straight into the tools you use every day.</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        <a
+          v-for="t in visibleQuickTools"
+          :key="t.id"
+          :href="t.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="card p-5 flex flex-col items-center justify-center text-center gap-3 hover:border-sycamore-300 hover:shadow-md transition-all group"
+        >
+          <div class="w-14 h-14 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden group-hover:scale-105 transition-transform">
+            <img
+              v-if="t.logo_url"
+              :src="t.logo_url"
+              :alt="t.name"
+              referrerpolicy="no-referrer"
+              class="w-10 h-10 object-contain"
+            />
+            <SidebarIcon v-else name="arrow-right" />
+          </div>
+          <div>
+            <div class="font-semibold text-sm text-slate-900">{{ t.name }}</div>
+            <div class="text-[11px] text-slate-400 mt-0.5 inline-flex items-center gap-1">
+              Open <SidebarIcon name="arrow-right" />
+            </div>
+          </div>
+        </a>
       </div>
     </section>
 

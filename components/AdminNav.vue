@@ -38,7 +38,11 @@ const groups: NavGroup[] = [
       { to: '/admin/announcements', label: 'Announcements', icon: 'info', section: 'announcements' },
       { to: '/admin/events', label: 'Events & Holidays', icon: 'calendar', section: 'events' },
       { to: '/admin/communication', label: 'Communication', icon: 'chat', section: 'communication' },
-      { to: '/admin/contacts', label: 'Key Contacts', icon: 'phone', section: 'contacts' }
+      { to: '/admin/contacts', label: 'Key Contacts', icon: 'phone', section: 'contacts' },
+      { to: '/admin/quick-tools', label: 'Quick Tools', icon: 'arrow-right', section: 'quick-tools' },
+      { to: '/admin/email', label: 'Email Settings', icon: 'info', section: 'email' },
+      { to: '/admin/email-templates', label: 'Email Templates', icon: 'book', section: 'email-templates' },
+      { to: '/admin/broadcast', label: 'Broadcast', icon: 'mail', section: 'broadcast' }
     ]
   },
   {
@@ -58,7 +62,8 @@ const groups: NavGroup[] = [
     label: 'Access control',
     icon: 'star',
     items: [
-      { to: '/admin/admins', label: 'Admin Access', icon: 'users', superAdminOnly: true }
+      { to: '/admin/admins', label: 'Admin Access', icon: 'users', superAdminOnly: true },
+      { to: '/admin/google-sync', label: 'Google Sync', icon: 'sparkle', superAdminOnly: true }
     ]
   }
 ]

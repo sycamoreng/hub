@@ -29,9 +29,10 @@ interface AuthorMeta {
 }
 
 const supabase = useSupabase()
-const { user, ready, isAuthenticated } = useAuth()
+const { user, ready, isAuthenticated, isAdmin } = useAuth()
 const { fetchPosts, createPost, deletePost, fetchReactions, toggleReaction, fetchMentionsForPosts, fetchMentionsForAnnouncements } = useFeed()
 const { fetchProfilesByUserIds } = useProfile()
+const { fetchCountsForTargets } = useComments()
 const toast = useToast()
 
 const loading = ref(true)
@@ -42,6 +43,7 @@ const reactions = ref<ReactionRow[]>([])
 const authors = ref<Record<string, AuthorMeta>>({})
 const mentionsByPost = ref<Record<string, PostMention[]>>({})
 const mentionsByAnnouncement = ref<Record<string, PostMention[]>>({})
+const commentCounts = ref<Record<string, number>>({})
 const composer = ref('')
 const composerImage = ref('')
 const composerKind = ref<PostKind>('standard')
@@ -88,17 +90,22 @@ async function load() {
     ])
     posts.value = p
     announcements.value = (a.data ?? []) as AnnouncementRow[]
-    const [rxs, mentions, annMentions] = await Promise.all([
+    const [rxs, mentions, annMentions, counts] = await Promise.all([
       fetchReactions([
         { type: 'post', ids: posts.value.map(x => x.id) },
         { type: 'announcement', ids: announcements.value.map(x => x.id) }
       ]),
       fetchMentionsForPosts(posts.value.map(x => x.id)),
-      fetchMentionsForAnnouncements(announcements.value.map(x => x.id))
+      fetchMentionsForAnnouncements(announcements.value.map(x => x.id)),
+      fetchCountsForTargets([
+        { type: 'post', ids: posts.value.map(x => x.id) },
+        { type: 'announcement', ids: announcements.value.map(x => x.id) }
+      ])
     ])
     reactions.value = rxs
     mentionsByPost.value = mentions
     mentionsByAnnouncement.value = annMentions
+    commentCounts.value = counts
     const reactorIds = Array.from(new Set(rxs.map(r => r.user_id)))
     const allAuthorIds = Array.from(new Set([...posts.value.map(p => p.author_id), ...reactorIds]))
     await loadAuthors(allAuthorIds)
@@ -319,6 +326,13 @@ definePageMeta({ title: 'Feed' })
               :disabled="!isAuthenticated"
               @toggle="handleToggle"
             />
+            <CommentList
+              target-type="announcement"
+              :target-id="a.id"
+              :initial-count="commentCounts[`announcement:${a.id}`] || 0"
+              :current-user-id="user?.id ?? null"
+              :is-admin="isAdmin"
+            />
           </div>
         </article>
       </section>
@@ -355,6 +369,13 @@ definePageMeta({ title: 'Feed' })
               :reactors-by-emoji="reactorsFor('post', p.id)"
               :disabled="!isAuthenticated"
               @toggle="handleToggle"
+            />
+            <CommentList
+              target-type="post"
+              :target-id="p.id"
+              :initial-count="commentCounts[`post:${p.id}`] || 0"
+              :current-user-id="user?.id ?? null"
+              :is-admin="isAdmin"
             />
           </template>
         </PostCard>

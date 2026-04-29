@@ -39,6 +39,10 @@ const SECTIONS = [
   { key: 'locations', label: 'Locations' },
   { key: 'contacts', label: 'Key Contacts' },
   { key: 'communication', label: 'Communication' },
+  { key: 'quick-tools', label: 'Quick Tools' },
+  { key: 'email', label: 'Email Settings' },
+  { key: 'email-templates', label: 'Email Templates' },
+  { key: 'broadcast', label: 'Broadcast' },
   { key: 'branding', label: 'Branding' },
   { key: 'benefits', label: 'Benefits' },
   { key: 'company', label: 'Company Info' }
@@ -324,6 +328,10 @@ function sectionPermissionCount(section: string) {
     </div>
 
     <div class="card overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/60">
+        <h2 class="text-sm font-semibold text-slate-900">Admins</h2>
+        <div class="text-xs text-slate-500"><span class="text-slate-700">{{ admins.length }}</span> total</div>
+      </div>
       <div v-if="loading" class="p-10 text-center text-slate-500">Loading admins...</div>
       <table v-else class="w-full text-sm">
         <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">

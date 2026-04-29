@@ -27,16 +27,56 @@ const emit = defineEmits<{
 
 const open = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
+const triggerEl = ref<HTMLElement | null>(null)
+const pickerEl = ref<HTMLElement | null>(null)
+const pickerStyle = ref<Record<string, string>>({})
 
 function close() { open.value = false }
 
-function onDocClick(e: MouseEvent) {
-  if (!open.value) return
-  if (rootEl.value && !rootEl.value.contains(e.target as Node)) open.value = false
+function positionPicker() {
+  if (!triggerEl.value) return
+  const rect = triggerEl.value.getBoundingClientRect()
+  const pickerWidth = 320
+  const margin = 12
+  const viewportW = window.innerWidth
+  let left = rect.left
+  if (left + pickerWidth + margin > viewportW) left = Math.max(margin, viewportW - pickerWidth - margin)
+  pickerStyle.value = {
+    top: `${rect.bottom + 8}px`,
+    left: `${left}px`
+  }
 }
 
-onMounted(() => document.addEventListener('click', onDocClick))
-onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+function onDocClick(e: MouseEvent) {
+  if (!open.value) return
+  const target = e.target as Node
+  if (rootEl.value?.contains(target)) return
+  if (pickerEl.value?.contains(target)) return
+  open.value = false
+}
+
+function onScrollOrResize() {
+  if (open.value) positionPicker()
+}
+
+async function toggleOpen() {
+  open.value = !open.value
+  if (open.value) {
+    await nextTick()
+    positionPicker()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
+  window.addEventListener('scroll', onScrollOrResize, true)
+  window.addEventListener('resize', onScrollOrResize)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
+  window.removeEventListener('scroll', onScrollOrResize, true)
+  window.removeEventListener('resize', onScrollOrResize)
+})
 
 function pick(emoji: string) {
   if (props.disabled) return
@@ -80,18 +120,22 @@ function pick(emoji: string) {
     </span>
 
     <button
+      ref="triggerEl"
       type="button"
       class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-dashed border-slate-300 text-xs font-medium text-slate-500 hover:bg-slate-50"
       :disabled="disabled"
-      @click.stop="open = !open"
+      @click.stop="toggleOpen"
     >
       <SidebarIcon name="plus" />
       <span>React</span>
     </button>
 
+    <Teleport to="body">
     <div
       v-if="open"
-      class="absolute z-30 top-full mt-2 left-0 w-80 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-xl shadow-xl p-3"
+      ref="pickerEl"
+      class="fixed z-[60] w-80 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-xl shadow-xl p-3"
+      :style="pickerStyle"
       @click.stop
     >
       <div class="mb-3">
@@ -124,5 +168,6 @@ function pick(emoji: string) {
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>

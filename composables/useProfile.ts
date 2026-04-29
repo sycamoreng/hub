@@ -85,13 +85,22 @@ export function useProfile() {
   }
 
   async function saveOwnProfile(profile: UserProfile): Promise<UserProfile> {
-    const payload = { ...profile, updated_at: new Date().toISOString() }
+    const existing = await fetchProfile(profile.user_id)
+    const avatarChanged = (existing?.avatar_url ?? '') !== (profile.avatar_url ?? '')
+    const payload: any = { ...profile, updated_at: new Date().toISOString() }
+    if (avatarChanged) payload.avatar_source = 'user'
     const { data, error } = await supabase
       .from('user_profiles')
       .upsert(payload, { onConflict: 'user_id' })
       .select('*')
       .maybeSingle()
     if (error) throw error
+    if (avatarChanged) {
+      await supabase.from('user_profile_locks').upsert(
+        { user_id: profile.user_id, field: 'avatar_url' },
+        { onConflict: 'user_id,field' }
+      )
+    }
     return (data as UserProfile) ?? profile
   }
 

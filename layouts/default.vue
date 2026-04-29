@@ -48,9 +48,14 @@ async function handleSignOut() {
               <div class="text-[11px] text-slate-500 truncate">{{ profile.email }}</div>
             </div>
           </div>
-          <NuxtLink to="/profile" class="flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-100 transition-colors">
-            My profile
-          </NuxtLink>
+          <div class="grid grid-cols-2 gap-2">
+            <NuxtLink to="/profile" class="flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-100 transition-colors">
+              My profile
+            </NuxtLink>
+            <NuxtLink to="/notification-settings" class="flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-100 transition-colors">
+              Emails
+            </NuxtLink>
+          </div>
           <div class="grid grid-cols-2 gap-2">
             <NuxtLink to="/admin" class="flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors">
               <SidebarIcon name="edit" /> Admin
