@@ -139,7 +139,7 @@ const visibleQuickTools = computed(() => {
     if (!allowed || allowed.length === 0) return true
     if (admin) return true
     return dept ? allowed.includes(dept) : false
-  })
+  }).slice(0, 5)
 })
 </script>
 

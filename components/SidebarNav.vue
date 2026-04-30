@@ -2,11 +2,31 @@
 interface NavItem { to: string; label: string; icon: string }
 interface NavGroup { id: string; label: string; icon: string; items: NavItem[] }
 
-const standalone: NavItem[] = [
-  { to: '/', label: 'Home', icon: 'home' },
-  { to: '/feed', label: 'Feed', icon: 'chat' },
-  { to: '/onboarding', label: 'Onboarding', icon: 'check' }
-]
+import { useSupabase } from '~/utils/supabase'
+
+const supabase = useSupabase()
+const raffleVisible = ref(false)
+
+async function loadRaffleVisibility() {
+  const { data } = await supabase
+    .from('raffle_settings')
+    .select('visible_on_sidebar')
+    .eq('id', 1)
+    .maybeSingle()
+  raffleVisible.value = Boolean((data as any)?.visible_on_sidebar)
+}
+loadRaffleVisibility()
+
+const standalone = computed<NavItem[]>(() => {
+  const items: NavItem[] = [
+    { to: '/', label: 'Home', icon: 'home' },
+    { to: '/feed', label: 'Feed', icon: 'chat' }
+  ]
+  if (raffleVisible.value) {
+    items.push({ to: '/raffle', label: "Workers' Day Raffle", icon: 'sparkle' })
+  }
+  return items
+})
 
 const groups: NavGroup[] = [
   {
@@ -47,6 +67,15 @@ const groups: NavGroup[] = [
       { to: '/communication', label: 'Communication', icon: 'chat' },
       { to: '/contacts', label: 'Key Contacts', icon: 'phone' },
       { to: '/calendar', label: 'Calendar', icon: 'calendar' }
+    ]
+  },
+  {
+    id: 'productivity',
+    label: 'Productivity',
+    icon: 'sparkle',
+    items: [
+      { to: '/tools', label: 'Tools', icon: 'gift' },
+      { to: '/onboarding', label: 'Onboarding', icon: 'check' }
     ]
   }
 ]

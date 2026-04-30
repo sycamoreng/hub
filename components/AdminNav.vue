@@ -42,7 +42,8 @@ const groups: NavGroup[] = [
       { to: '/admin/quick-tools', label: 'Quick Tools', icon: 'arrow-right', section: 'quick-tools' },
       { to: '/admin/email', label: 'Email Settings', icon: 'info', section: 'email' },
       { to: '/admin/email-templates', label: 'Email Templates', icon: 'book', section: 'email-templates' },
-      { to: '/admin/broadcast', label: 'Broadcast', icon: 'mail', section: 'broadcast' }
+      { to: '/admin/broadcast', label: 'Broadcast', icon: 'mail', section: 'broadcast' },
+      { to: '/admin/raffle', label: "Workers' Day Raffle", icon: 'sparkle' }
     ]
   },
   {

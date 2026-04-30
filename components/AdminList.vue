@@ -96,11 +96,11 @@ function goto(p: number) {
       <div v-else-if="rows.length === 0" class="p-8 text-center text-slate-400 text-sm">No items yet. Create one to get started.</div>
       <div v-else-if="total === 0" class="p-8 text-center text-slate-400 text-sm">No matches for "{{ search }}".</div>
       <div v-else>
-        <div class="hidden md:grid items-center gap-4 px-5 py-2 border-b border-slate-100 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
-          <div class="flex-1 grid gap-4" :style="{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }">
-            <div v-for="c in columns" :key="c.key" class="truncate">{{ c.label }}</div>
+        <div class="hidden md:flex items-center gap-4 px-5 py-2 border-b border-slate-100 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
+          <div class="flex-1 grid gap-4 min-w-0" :style="{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }">
+            <div v-for="c in columns" :key="c.key" class="truncate whitespace-nowrap">{{ c.label }}</div>
           </div>
-          <div class="w-[88px] shrink-0 text-right whitespace-nowrap">Actions</div>
+          <div class="w-24 shrink-0 text-right whitespace-nowrap leading-none">Actions</div>
         </div>
         <div
           v-for="row in pageRows"
@@ -113,7 +113,7 @@ function goto(p: number) {
               <div class="truncate" :class="{ 'font-medium text-slate-900': c.key === columns[0].key }">{{ c.render ? c.render(row) : row[c.key] }}</div>
             </div>
           </div>
-          <div class="flex items-center gap-2 shrink-0 w-[88px] justify-end whitespace-nowrap">
+          <div class="flex items-center gap-2 shrink-0 w-24 justify-end whitespace-nowrap">
             <slot name="row-actions" :row="row" />
             <button class="p-2 rounded-lg hover:bg-sycamore-50 text-slate-600 hover:text-sycamore-700" @click="emit('edit', row)" aria-label="Edit"><SidebarIcon name="edit" /></button>
             <button class="p-2 rounded-lg hover:bg-rose-50 text-slate-600 hover:text-rose-700" @click="emit('delete', row)" aria-label="Delete"><SidebarIcon name="trash" /></button>

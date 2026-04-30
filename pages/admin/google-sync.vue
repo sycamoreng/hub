@@ -250,12 +250,12 @@ onMounted(async () => {
     <p class="section-subtitle">Only super admins can access Google Workspace sync.</p>
   </div>
   <div v-else class="space-y-6">
-    <header class="flex items-start justify-between gap-4 flex-wrap">
-      <div>
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="min-w-0">
         <h1 class="section-title">Google Workspace sync</h1>
         <p class="section-subtitle">Keep staff records aligned with Google Workspace. Admin edits are preserved.</p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2 shrink-0">
         <button class="btn-secondary" :disabled="running" @click="runDryRun">
           {{ running ? 'Running...' : 'Dry run' }}
         </button>
@@ -265,7 +265,7 @@ onMounted(async () => {
       </div>
     </header>
 
-    <div class="flex gap-1 border-b border-slate-200 text-sm font-medium">
+    <div class="flex gap-1 border-b border-slate-200 text-sm font-medium overflow-x-auto">
       <button
         v-for="t in (['overview','users','departments','settings'] as const)"
         :key="t"

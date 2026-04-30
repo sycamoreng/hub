@@ -246,7 +246,7 @@ async function runSync(ctx: SyncContext) {
       const locks = existing ? (ctx.staffLocks.get(existing.id) ?? new Set<string>()) : new Set<string>()
 
       const fullName = (u.name?.fullName ?? [u.name?.givenName, u.name?.familyName].filter(Boolean).join(' ') ?? '').trim() || email
-      const primaryPhone = (u.phones ?? []).find(p => p.primary)?.value ?? (u.phones ?? [])[0]?.value ?? null
+      const primaryPhone = (u.phones ?? []).find(p => p.primary)?.value ?? (u.phones ?? [])[0]?.value ?? ''
       const deptKey = pickDepartmentValue(u, deptSource)
       const deptId = deptKey ? (ctx.deptMap.get(deptKey.toLowerCase()) ?? null) : null
       const isActive = !u.suspended
