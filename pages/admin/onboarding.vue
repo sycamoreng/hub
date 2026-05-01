@@ -8,6 +8,8 @@ const editing = ref<any | null>(null)
 const saving = ref(false)
 const resourcesOpen = ref(false)
 const resourcesStep = ref<any | null>(null)
+const assignOpen = ref(false)
+const assignStep = ref<any | null>(null)
 
 const fields = [
   { key: 'title', label: 'Title', required: true },
@@ -67,6 +69,7 @@ function openNew() {
 }
 function openEdit(row: any) { editing.value = { ...row }; editorOpen.value = true }
 function manageResources(row: any) { resourcesStep.value = row; resourcesOpen.value = true }
+function manageAssignments(row: any) { assignStep.value = row; assignOpen.value = true }
 
 async function save(payload: Record<string, any>) {
   saving.value = true
@@ -102,8 +105,8 @@ async function del(row: any) {
 <template>
   <div class="max-w-5xl">
     <AdminList
-      title="Learning path"
-      description="Tasks, videos, articles, and full modules new staff work through."
+      title="Learning"
+      description="Build lessons, then assign them to individuals, departments, or the whole organization."
       :columns="columns"
       :rows="items"
       :loading="loading"
@@ -117,7 +120,12 @@ async function del(row: any) {
           type="button"
           class="text-xs font-medium text-sycamore-700 hover:underline"
           @click="manageResources(row)"
-        >Manage resources</button>
+        >Resources</button>
+        <button
+          type="button"
+          class="text-xs font-medium text-sycamore-700 hover:underline ml-3"
+          @click="manageAssignments(row)"
+        >Assignments</button>
       </template>
     </AdminList>
     <AdminEditor :open="editorOpen" :title="editing?.id ? 'Edit lesson' : 'New lesson'" :fields="(fields as any)" :initial="editing" :saving="saving" @close="editorOpen = false" @save="save" />
@@ -126,6 +134,12 @@ async function del(row: any) {
       :step-id="resourcesStep?.id ?? null"
       :step-title="resourcesStep?.title ?? ''"
       @close="resourcesOpen = false"
+    />
+    <LearningAssignmentsEditor
+      :open="assignOpen"
+      :step-id="assignStep?.id ?? null"
+      :step-title="assignStep?.title ?? ''"
+      @close="assignOpen = false"
     />
   </div>
 </template>

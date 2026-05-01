@@ -26,7 +26,7 @@ interface RolePreset {
 }
 
 const SECTIONS = [
-  { key: 'onboarding', label: 'Onboarding' },
+  { key: 'onboarding', label: 'Learning' },
   { key: 'products', label: 'Products' },
   { key: 'technology', label: 'Technology' },
   { key: 'chatbot', label: 'Chatbot' },

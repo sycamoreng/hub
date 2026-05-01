@@ -7,7 +7,7 @@ const counts = ref<Record<string, number>>({})
 const loading = ref(true)
 
 const tables = [
-  { table: 'onboarding_steps', label: 'Onboarding', to: '/admin/onboarding', icon: 'check' },
+  { table: 'onboarding_steps', label: 'Learning', to: '/admin/onboarding', icon: 'check' },
   { table: 'products', label: 'Products', to: '/admin/products', icon: 'gift' },
   { table: 'tech_stack', label: 'Technology', to: '/admin/technology', icon: 'palette' },
   { table: 'announcements', label: 'Announcements', to: '/admin/announcements', icon: 'info' },

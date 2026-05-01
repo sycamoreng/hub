@@ -257,10 +257,10 @@ async function runSync(ctx: SyncContext) {
         full_name: fullName,
         email,
         phone: primaryPhone,
-        department_id: deptId,
         joined_date: joinedDate,
         is_active: isActive
       }
+      void deptId
 
       if (!existing) {
         diff.push({
@@ -294,6 +294,8 @@ async function runSync(ctx: SyncContext) {
           if (existing.google_user_id !== value) changes[field] = { from: existing.google_user_id, to: value }
           continue
         }
+        if (field === 'phone') continue
+        if (field === 'department_id') continue
         if (locks.has(field)) continue
         const current = existing[field] ?? null
         const next = value ?? null

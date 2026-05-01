@@ -107,7 +107,7 @@ export function useCompanyData() {
     return data ?? []
   }
 
-  async function fetchOnboardingSteps() {
+  async function fetchOnboardingSteps(opts?: { assignedOnly?: boolean }) {
     const { data, error } = await supabase
       .from('onboarding_steps')
       .select('*, onboarding_resources(*)')
@@ -115,12 +115,24 @@ export function useCompanyData() {
       .order('display_order', { ascending: true })
       .order('title', { ascending: true })
     if (error) throw error
-    return (data ?? []).map((s: any) => ({
+    const steps = (data ?? []).map((s: any) => ({
       ...s,
       onboarding_resources: (s.onboarding_resources ?? [])
         .slice()
         .sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0))
     }))
+
+    if (!opts?.assignedOnly) return steps
+
+    const { data: assigned, error: assignedErr } = await supabase.rpc('user_assigned_step_ids')
+    if (assignedErr) throw assignedErr
+    const dueMap: Record<string, string | null> = {}
+    for (const row of (assigned ?? []) as { step_id: string; due_date: string | null }[]) {
+      dueMap[row.step_id] = row.due_date ?? null
+    }
+    return steps
+      .filter(s => s.id in dueMap)
+      .map(s => ({ ...s, due_date: dueMap[s.id] ?? null }))
   }
 
   async function fetchProducts() {

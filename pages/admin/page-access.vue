@@ -24,7 +24,7 @@ const pages: PageEntry[] = [
   { path: '/contacts', label: 'Key Contacts', group: 'Communication' },
   { path: '/calendar', label: 'Calendar', group: 'Communication' },
   { path: '/tools', label: 'Tools', group: 'Productivity' },
-  { path: '/onboarding', label: 'Onboarding', group: 'Productivity' }
+  { path: '/onboarding', label: 'Learning', group: 'Productivity' }
 ]
 
 const grouped = computed(() => {

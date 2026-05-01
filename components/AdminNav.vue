@@ -17,7 +17,7 @@ const groups: NavGroup[] = [
       { to: '/admin/staff', label: 'Staff', icon: 'users', section: 'staff' },
       { to: '/admin/leadership', label: 'Leadership', icon: 'star', section: 'leadership' },
       { to: '/admin/departments', label: 'Departments', icon: 'building', section: 'departments' },
-      { to: '/admin/onboarding', label: 'Onboarding', icon: 'check', section: 'onboarding' }
+      { to: '/admin/onboarding', label: 'Learning', icon: 'check', section: 'onboarding' }
     ]
   },
   {

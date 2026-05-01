@@ -51,7 +51,7 @@ const baseGroups: NavGroup[] = [
     icon: 'sparkle',
     items: [
       { to: '/tools', label: 'Tools', icon: 'gift' },
-      { to: '/onboarding', label: 'Onboarding', icon: 'check' }
+      { to: '/onboarding', label: 'Learning', icon: 'check' }
     ]
   },
   {

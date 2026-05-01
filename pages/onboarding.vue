@@ -28,6 +28,8 @@ interface Step {
   cover_image_url: string
   estimated_minutes: number
   onboarding_resources: Resource[]
+  due_date?: string | null
+  scope_types?: string[]
 }
 
 const supabase = useSupabase()
@@ -44,16 +46,37 @@ const expanded = ref<Record<string, boolean>>({})
 async function loadAll() {
   loading.value = true
   try {
-    steps.value = (await fetchOnboardingSteps()) as Step[]
-    if (user.value) {
-      const { data } = await supabase
-        .from('onboarding_progress')
-        .select('step_id')
-        .eq('user_id', user.value.id)
-      const map: Record<string, boolean> = {}
-      ;(data ?? []).forEach((r: any) => { map[r.step_id] = true })
-      completed.value = map
+    const allSteps = (await fetchOnboardingSteps()) as Step[]
+
+    if (!user.value) {
+      steps.value = []
+      completed.value = {}
+      return
     }
+
+    const [{ data: assignments }, { data: progress }] = await Promise.all([
+      supabase.from('learning_assignments').select('step_id, scope_type, due_date'),
+      supabase.from('onboarding_progress').select('step_id').eq('user_id', user.value.id)
+    ])
+
+    const byStep = new Map<string, { scope_types: Set<string>; due: string | null }>()
+    for (const a of (assignments ?? []) as any[]) {
+      const entry = byStep.get(a.step_id) ?? { scope_types: new Set<string>(), due: null }
+      entry.scope_types.add(a.scope_type)
+      if (a.due_date && (!entry.due || a.due_date < entry.due)) entry.due = a.due_date
+      byStep.set(a.step_id, entry)
+    }
+
+    steps.value = allSteps
+      .filter(s => byStep.has(s.id))
+      .map(s => {
+        const meta = byStep.get(s.id)!
+        return { ...s, due_date: meta.due, scope_types: Array.from(meta.scope_types) }
+      })
+
+    const map: Record<string, boolean> = {}
+    ;(progress ?? []).forEach((r: any) => { map[r.step_id] = true })
+    completed.value = map
   } finally {
     loading.value = false
   }
@@ -129,10 +152,10 @@ function toggleExpand(id: string) {
       <div class="relative z-10">
         <div class="badge bg-white/15 text-white border-white/20 mb-4">
           <SidebarIcon name="check" />
-          <span class="ml-1">Learning hub</span>
+          <span class="ml-1">Learning</span>
         </div>
-        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Welcome to Sycamore</h1>
-        <p class="text-sycamore-100 max-w-2xl">A guided path of videos, readings, and tasks to get you fully oriented in your first weeks.</p>
+        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Your learning path</h1>
+        <p class="text-sycamore-100 max-w-2xl">Lessons, videos, and tasks assigned to you, your department, or the whole company.</p>
         <div v-if="user" class="mt-6 max-w-md">
           <div class="flex items-center justify-between text-sm mb-2">
             <span>{{ stats.done }} of {{ stats.total }} completed</span>
@@ -154,7 +177,7 @@ function toggleExpand(id: string) {
 
     <div v-if="loading" class="text-slate-400">Loading learning path...</div>
     <div v-else-if="steps.length === 0" class="card p-8 text-center text-slate-500">
-      No onboarding content has been set up yet.
+      Nothing assigned to you yet. Check back once your admin assigns lessons.
     </div>
     <div v-else class="space-y-10">
       <section v-for="cat in categories" :key="cat">
@@ -202,6 +225,7 @@ function toggleExpand(id: string) {
                   <h3 class="font-semibold text-slate-900">{{ s.title }}</h3>
                   <span v-if="s.is_required" class="badge badge-amber">Required</span>
                   <span v-if="s.estimated_minutes" class="text-xs text-slate-400">~{{ s.estimated_minutes }} min</span>
+                  <span v-if="s.due_date" class="text-xs text-rose-600 font-medium">Due {{ s.due_date }}</span>
                 </div>
                 <p v-if="s.description" class="text-sm text-slate-600 mt-1.5">{{ s.description }}</p>
 
