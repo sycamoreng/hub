@@ -116,7 +116,7 @@ export function useProfile() {
   async function fetchStaffById(staffId: string) {
     const { data } = await supabase
       .from('staff_members')
-      .select('id, full_name, email, role, phone, joined_date, department_id, location_id, auth_user_id, bio')
+      .select('id, full_name, email, role, phone, joined_date, department_id, location_id, auth_user_id, bio, google_user_id')
       .eq('id', staffId)
       .maybeSingle()
     return data

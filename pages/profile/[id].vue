@@ -96,10 +96,47 @@ const tenure = computed(() => {
   return { formatted, label }
 })
 
-const googleChatUrl = computed(() => {
-  if (!claimed.value || !staff.value?.email) return null
-  return `https://mail.google.com/chat/u/0/#chat/dm/${encodeURIComponent(staff.value.email)}`
-})
+const canChat = computed(() => !!staff.value?.google_user_id && !isOwn.value)
+const chatLoading = ref(false)
+const chatError = ref<string | null>(null)
+
+async function openGoogleChat() {
+  if (!staff.value?.id) return
+  chatError.value = null
+  chatLoading.value = true
+  try {
+    const supabase = useSupabase()
+    const { data: session } = await supabase.auth.getSession()
+    const token = session.session?.access_token
+    if (!token) {
+      chatError.value = 'Please sign in to chat'
+      return
+    }
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-chat-dm`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ staff_id: staff.value.id })
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json.space_id) {
+      chatError.value = json.error === 'no dm space found'
+        ? 'No existing chat. Start one in Google Chat first.'
+        : (json.error || 'Could not open chat')
+      return
+    }
+    const viewerEmail = user.value?.email ?? ''
+    const authUserParam = viewerEmail ? `?authuser=${encodeURIComponent(viewerEmail)}` : ''
+    const url = `https://chat.google.com/dm/${encodeURIComponent(json.space_id)}${authUserParam}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  } catch (e: any) {
+    chatError.value = e?.message ?? 'Could not open chat'
+  } finally {
+    chatLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -152,15 +189,17 @@ const googleChatUrl = computed(() => {
           <NuxtLink v-if="isOwn" to="/profile" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-medium">
             <SidebarIcon name="edit" /> Edit my profile
           </NuxtLink>
-          <a
-            v-if="googleChatUrl && !isOwn"
-            :href="googleChatUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-slate-800 hover:bg-white/90 text-xs font-medium"
+          <button
+            v-if="canChat"
+            type="button"
+            :disabled="chatLoading"
+            @click="openGoogleChat"
+            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-slate-800 hover:bg-white/90 disabled:opacity-70 text-xs font-medium"
           >
-            <SidebarIcon name="chat" /> Chat on Google
-          </a>
+            <SidebarIcon name="chat" />
+            <span>{{ chatLoading ? 'Opening...' : 'Chat on Google' }}</span>
+          </button>
+          <span v-if="chatError" class="text-[11px] text-white/90 bg-black/20 px-2 py-1 rounded-md self-center">{{ chatError }}</span>
         </div>
       </div>
 
@@ -183,8 +222,8 @@ const googleChatUrl = computed(() => {
               <SidebarIcon name="phone" />
               <a :href="`tel:${staff.phone}`" class="hover:text-sycamore-700">{{ staff.phone }}</a>
             </div>
-            <div v-if="!claimed" class="text-xs text-slate-400 italic pt-1">
-              This colleague has not signed into the hub yet, so Google Chat is unavailable.
+            <div v-if="!staff.google_user_id" class="text-xs text-slate-400 italic pt-1">
+              This colleague is not synced from Google yet, so Google Chat is unavailable.
             </div>
           </div>
 
