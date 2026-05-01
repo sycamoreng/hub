@@ -177,7 +177,13 @@ const simulationSummary = computed(() => {
 })
 
 async function seal() {
-  if (!confirm('Seal the raffle? This commits the shuffle and cannot be easily undone. Proceed?')) return
+  const ok = await toast.confirm({
+    title: 'Seal the raffle?',
+    message: 'This commits the shuffle and cannot be easily undone.',
+    variant: 'primary',
+    confirmLabel: 'Seal'
+  })
+  if (!ok) return
   busy.value = true
   try {
     const { error } = await supabase.rpc('raffle_seed')
@@ -190,7 +196,13 @@ async function seal() {
 }
 
 async function goLive() {
-  if (!confirm('Go live? Staff will be able to spin immediately.')) return
+  const ok = await toast.confirm({
+    title: 'Go live?',
+    message: 'Staff will be able to spin immediately.',
+    variant: 'primary',
+    confirmLabel: 'Go live'
+  })
+  if (!ok) return
   busy.value = true
   try {
     const { error } = await supabase.rpc('raffle_set_status', { new_status: 'live' })
@@ -203,7 +215,13 @@ async function goLive() {
 }
 
 async function close() {
-  if (!confirm('Close the raffle? No further spins will be possible.')) return
+  const ok = await toast.confirm({
+    title: 'Close the raffle?',
+    message: 'No further spins will be possible.',
+    variant: 'danger',
+    confirmLabel: 'Close'
+  })
+  if (!ok) return
   busy.value = true
   try {
     const { error } = await supabase.rpc('raffle_set_status', { new_status: 'closed' })
@@ -216,10 +234,20 @@ async function close() {
 }
 
 async function reset() {
-  if (!confirm('RESET everything? This wipes all allocations and returns to draft. Super admin only.')) return
-  if (!confirm('Really reset? Type OK in the next prompt.')) return
-  const ack = prompt('Type OK to confirm reset:')
-  if (ack !== 'OK') return
+  const first = await toast.confirm({
+    title: 'Reset the raffle?',
+    message: 'This wipes all allocations and returns the raffle to draft. Super admin only.',
+    variant: 'danger',
+    confirmLabel: 'Continue'
+  })
+  if (!first) return
+  const final = await toast.confirm({
+    title: 'Final confirmation',
+    message: 'This is destructive and cannot be undone. Proceed with reset?',
+    variant: 'danger',
+    confirmLabel: 'Reset everything'
+  })
+  if (!final) return
   busy.value = true
   try {
     const { error } = await supabase.rpc('raffle_reset')

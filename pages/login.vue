@@ -7,16 +7,57 @@ const route = useRoute()
 const error = ref<string | null>(null)
 const loading = ref(false)
 
+const REDIRECT_KEY = 'sycamore.postLoginRedirect'
+
 watchEffect(() => {
   if (domainError.value) error.value = domainError.value
 })
 
+function sanitize(path: string | null | undefined): string | null {
+  if (!path || typeof path !== 'string') return null
+  if (!path.startsWith('/') || path.startsWith('//')) return null
+  if (path === '/login') return null
+  return path
+}
+
+function resolveRedirect(): string {
+  const raw = route.query.redirect
+  const fromQuery = Array.isArray(raw) ? raw[0] : raw
+  const queryPath = sanitize(typeof fromQuery === 'string' ? fromQuery : null)
+  if (queryPath) return queryPath
+  if (typeof window !== 'undefined') {
+    const stored = sanitize(window.sessionStorage.getItem(REDIRECT_KEY))
+    if (stored) return stored
+  }
+  return '/'
+}
+
+function rememberRedirect(path: string) {
+  if (typeof window === 'undefined') return
+  const clean = sanitize(path)
+  if (clean) window.sessionStorage.setItem(REDIRECT_KEY, clean)
+}
+
+function clearStoredRedirect() {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.removeItem(REDIRECT_KEY)
+}
+
+async function doRedirect() {
+  const target = resolveRedirect()
+  clearStoredRedirect()
+  await navigateTo(target, { replace: true })
+}
+
 onMounted(async () => {
   await init()
   if (isAuthenticated.value) {
-    const redirect = (route.query.redirect as string) || '/'
-    await navigateTo(redirect)
+    await doRedirect()
   }
+})
+
+watch(isAuthenticated, async (val) => {
+  if (val) await doRedirect()
 })
 
 onBeforeUnmount(() => clearDomainError())
@@ -25,8 +66,9 @@ async function googleSignIn() {
   error.value = null
   loading.value = true
   try {
-    const redirect = (route.query.redirect as string) || '/'
-    await signInWithGoogle(redirect)
+    const target = resolveRedirect()
+    rememberRedirect(target)
+    await signInWithGoogle(target)
   } catch (e: any) {
     error.value = e.message || 'Google sign-in failed.'
     loading.value = false
@@ -44,7 +86,7 @@ async function googleSignIn() {
         <h1 class="text-4xl font-bold tracking-tight mb-4 max-w-md">Welcome to the Sycamore Information Hub.</h1>
         <p class="text-sycamore-50 max-w-md">Sign in with your Sycamore Google account to access company knowledge, products, policies, and more.</p>
       </div>
-      <div class="relative z-10 text-sm text-sycamore-100/80">sycamore.ng &copy; 2025</div>
+      <div class="relative z-10 text-sm text-sycamore-100/80">Sycamore &copy; {{ new Date().getFullYear() }}</div>
       <div class="absolute -right-24 -bottom-24 w-96 h-96 rounded-full bg-white/5" />
       <div class="absolute -right-8 top-32 w-48 h-48 rounded-full bg-white/5" />
     </div>

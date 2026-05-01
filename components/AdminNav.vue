@@ -64,6 +64,8 @@ const groups: NavGroup[] = [
     icon: 'star',
     items: [
       { to: '/admin/admins', label: 'Admin Access', icon: 'users', superAdminOnly: true },
+      { to: '/admin/page-access', label: 'Page Access', icon: 'check', superAdminOnly: true },
+      { to: '/admin/sidebar-order', label: 'Sidebar Order', icon: 'arrow-right', superAdminOnly: true },
       { to: '/admin/google-sync', label: 'Google Sync', icon: 'sparkle', superAdminOnly: true }
     ]
   }

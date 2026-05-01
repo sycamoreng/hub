@@ -6,6 +6,9 @@ import { useSupabase } from '~/utils/supabase'
 
 const supabase = useSupabase()
 const raffleVisible = ref(false)
+const { isAdmin } = useAuth()
+const { load: loadLocks, isLocked } = usePageLocks()
+const { order: sidebarOrder, load: loadOrder } = useSidebarOrder()
 
 async function loadRaffleVisibility() {
   const { data } = await supabase
@@ -16,6 +19,8 @@ async function loadRaffleVisibility() {
   raffleVisible.value = Boolean((data as any)?.visible_on_sidebar)
 }
 loadRaffleVisibility()
+loadLocks()
+loadOrder()
 
 const standalone = computed<NavItem[]>(() => {
   const items: NavItem[] = [
@@ -28,7 +33,7 @@ const standalone = computed<NavItem[]>(() => {
   return items
 })
 
-const groups: NavGroup[] = [
+const baseGroups: NavGroup[] = [
   {
     id: 'company',
     label: 'Company',
@@ -38,6 +43,15 @@ const groups: NavGroup[] = [
       { to: '/departments', label: 'Departments', icon: 'building' },
       { to: '/locations', label: 'Locations', icon: 'map' },
       { to: '/staff', label: 'Staff Directory', icon: 'users' }
+    ]
+  },
+  {
+    id: 'productivity',
+    label: 'Productivity',
+    icon: 'sparkle',
+    items: [
+      { to: '/tools', label: 'Tools', icon: 'gift' },
+      { to: '/onboarding', label: 'Onboarding', icon: 'check' }
     ]
   },
   {
@@ -68,25 +82,42 @@ const groups: NavGroup[] = [
       { to: '/contacts', label: 'Key Contacts', icon: 'phone' },
       { to: '/calendar', label: 'Calendar', icon: 'calendar' }
     ]
-  },
-  {
-    id: 'productivity',
-    label: 'Productivity',
-    icon: 'sparkle',
-    items: [
-      { to: '/tools', label: 'Tools', icon: 'gift' },
-      { to: '/onboarding', label: 'Onboarding', icon: 'check' }
-    ]
   }
 ]
 
+const orderedGroups = computed<NavGroup[]>(() => {
+  const byId = new Map(baseGroups.map(g => [g.id, g] as const))
+  const out: NavGroup[] = []
+  const seen = new Set<string>()
+  for (const id of sidebarOrder.value) {
+    const g = byId.get(id)
+    if (g) { out.push(g); seen.add(id) }
+  }
+  for (const g of baseGroups) {
+    if (!seen.has(g.id)) out.push(g)
+  }
+  return out
+})
+
+function itemVisible(item: NavItem) {
+  if (!isLocked(item.to)) return true
+  return isAdmin.value
+}
+
+const visibleStandalone = computed(() => standalone.value.filter(itemVisible))
+const visibleGroups = computed(() =>
+  orderedGroups.value
+    .map(g => ({ ...g, items: g.items.filter(itemVisible) }))
+    .filter(g => g.items.length > 0)
+)
+
 const route = useRoute()
 
-function groupContainsActive(group: NavGroup) {
+function groupContainsActive(group: { items: NavItem[] }) {
   return group.items.some(it => it.to === '/' ? route.path === '/' : route.path.startsWith(it.to))
 }
 
-const activeGroupId = computed(() => groups.find(groupContainsActive)?.id ?? groups[0].id)
+const activeGroupId = computed(() => visibleGroups.value.find(groupContainsActive)?.id ?? visibleGroups.value[0]?.id ?? '')
 
 const openId = ref<string>(activeGroupId.value)
 watch(activeGroupId, (val) => { openId.value = val })
@@ -99,7 +130,7 @@ function toggle(id: string) {
 <template>
   <nav class="flex flex-col gap-1">
     <NuxtLink
-      v-for="item in standalone"
+      v-for="item in visibleStandalone"
       :key="item.to"
       :to="item.to"
       class="nav-link"
@@ -107,9 +138,14 @@ function toggle(id: string) {
       exact-active-class="nav-link-active"
     >
       <SidebarIcon :name="item.icon" />
-      <span>{{ item.label }}</span>
+      <span class="flex-1">{{ item.label }}</span>
+      <span v-if="isLocked(item.to)" class="text-amber-500" title="Locked: hidden from staff">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5">
+          <path fill-rule="evenodd" d="M10 1a4 4 0 0 0-4 4v3H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1V5a4 4 0 0 0-4-4Zm2 7V5a2 2 0 1 0-4 0v3h4Z" clip-rule="evenodd" />
+        </svg>
+      </span>
     </NuxtLink>
-    <div v-for="group in groups" :key="group.id" class="mb-1">
+    <div v-for="group in visibleGroups" :key="group.id" class="mb-1">
       <button
         type="button"
         @click="toggle(group.id)"
@@ -140,7 +176,12 @@ function toggle(id: string) {
           exact-active-class="nav-link-active"
         >
           <SidebarIcon :name="item.icon" />
-          <span>{{ item.label }}</span>
+          <span class="flex-1">{{ item.label }}</span>
+          <span v-if="isLocked(item.to)" class="text-amber-500" title="Locked: hidden from staff">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5">
+              <path fill-rule="evenodd" d="M10 1a4 4 0 0 0-4 4v3H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1V5a4 4 0 0 0-4-4Zm2 7V5a2 2 0 1 0-4 0v3h4Z" clip-rule="evenodd" />
+            </svg>
+          </span>
         </NuxtLink>
       </div>
     </div>
