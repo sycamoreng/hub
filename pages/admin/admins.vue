@@ -45,7 +45,8 @@ const SECTIONS = [
   { key: 'broadcast', label: 'Broadcast' },
   { key: 'branding', label: 'Branding' },
   { key: 'benefits', label: 'Benefits' },
-  { key: 'company', label: 'Company Info' }
+  { key: 'company', label: 'Company Info' },
+  { key: 'exits', label: 'Exits' }
 ]
 const ACTIONS: CrudAction[] = ['create', 'read', 'update', 'delete']
 

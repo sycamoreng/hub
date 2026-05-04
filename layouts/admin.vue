@@ -43,9 +43,12 @@ async function handleSignOut() {
     </aside>
 
     <div class="flex-1 lg:ml-64 flex flex-col min-w-0">
-      <header class="lg:hidden sticky top-0 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-20">
-        <div class="font-bold text-slate-900 text-sm">Admin</div>
-        <button class="p-2 rounded-lg hover:bg-slate-100" @click="sidebarOpen = true"><SidebarIcon name="menu" /></button>
+      <header class="sticky top-0 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 z-20">
+        <div class="flex items-center gap-3">
+          <button class="lg:hidden p-2 rounded-lg hover:bg-slate-100" @click="sidebarOpen = true"><SidebarIcon name="menu" /></button>
+          <div class="font-bold text-slate-900 text-sm">Admin</div>
+        </div>
+        <NotificationsBell v-if="user" />
       </header>
       <main class="flex-1 p-4 sm:p-6 lg:p-10">
         <slot />

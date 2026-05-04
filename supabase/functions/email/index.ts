@@ -434,6 +434,88 @@ async function queueAnnouncement(adminClient: ReturnType<typeof createClient>, a
   return { queued: rows.length };
 }
 
+async function notifyExitInitiated(adminClient: ReturnType<typeof createClient>, caseId: string) {
+  const settings = await getSettings(adminClient);
+  if (!settings || settings.default_enabled === false) return { queued: 0 };
+
+  const { data: exitCase } = await adminClient
+    .from("exit_cases")
+    .select("id, exit_type, effective_date, last_working_day")
+    .eq("id", caseId)
+    .maybeSingle();
+  if (!exitCase) return { queued: 0 };
+
+  const { data: staff } = await adminClient
+    .from("staff_members")
+    .select("full_name, role, department_id")
+    .eq("id", (await adminClient.from("exit_cases").select("staff_id").eq("id", caseId).maybeSingle()).data?.staff_id ?? "")
+    .maybeSingle();
+
+  let departmentName: string | null = null;
+  if (staff?.department_id) {
+    const { data: dept } = await adminClient
+      .from("departments")
+      .select("name")
+      .eq("id", staff.department_id)
+      .maybeSingle();
+    departmentName = (dept as any)?.name ?? null;
+  }
+
+  const { data: units } = await adminClient
+    .from("exit_units")
+    .select("code, name, hod_user_id")
+    .eq("is_active", true);
+  if (!units || units.length === 0) return { queued: 0 };
+
+  const hodIds = units.map((u: any) => u.hod_user_id).filter(Boolean);
+  if (hodIds.length === 0) return { queued: 0 };
+
+  const { data: hods } = await adminClient
+    .from("staff_members")
+    .select("full_name, email, auth_user_id")
+    .in("auth_user_id", hodIds)
+    .not("email", "is", null);
+  const hodByAuth = new Map<string, any>();
+  for (const h of hods ?? []) if (h.auth_user_id) hodByAuth.set(h.auth_user_id, h);
+
+  const label = exitCase.exit_type === "resignation" ? "Resignation" : "Termination";
+  const appUrl = (settings as any).app_base_url || appBaseUrl();
+  const caseUrl = appUrl ? `${appUrl.replace(/\/$/, "")}/admin/exits?case=${caseId}` : "";
+  const staffName = staff?.full_name ?? "Staff member";
+  const staffRole = staff?.role ?? "";
+  const deptSuffix = departmentName ? ` · ${departmentName}` : "";
+
+  let queued = 0;
+  for (const u of units as any[]) {
+    if (!u.hod_user_id) continue;
+    const hod = hodByAuth.get(u.hod_user_id);
+    if (!hod?.email) continue;
+    const prefs = await ensurePrefs(adminClient, u.hod_user_id);
+    const unsubToken = prefs?.unsubscribe_token ?? "";
+    const vars = buildVars({
+      first_name: firstName(hod.full_name),
+      staff_name: staffName,
+      staff_role: staffRole,
+      staff_department_suffix: deptSuffix,
+      exit_label: label,
+      effective_date: exitCase.effective_date || "—",
+      last_working_day: exitCase.last_working_day || "—",
+      unit_name: u.name,
+      case_url: caseUrl,
+    }, settings, unsubToken, appUrl);
+    const ok = await queueFromTemplate(
+      adminClient,
+      "exit_initiated",
+      { email: hod.email, name: hod.full_name, user_id: u.hod_user_id, unsubscribe_token: unsubToken },
+      vars,
+      "exit_initiated",
+      { case_id: caseId, unit_code: u.code },
+    );
+    if (ok) queued++;
+  }
+  return { queued };
+}
+
 async function runQueue(adminClient: ReturnType<typeof createClient>, limit = 25) {
   const apiKey = Deno.env.get("SENDGRID_API_KEY");
   if (!apiKey) throw new Error("SENDGRID_API_KEY not configured");
@@ -558,8 +640,9 @@ Deno.serve(async (req: Request) => {
 
     const isService = isServiceRoleBearer(authHeader);
     const systemActions = new Set(["run_queue", "daily_reminders", "weekly_digest"]);
+    const authenticatedActions = new Set(["notify_exit_initiated", "unsubscribe"]);
 
-    if (!isService) {
+    if (!isService && !authenticatedActions.has(action)) {
       const { admin: isAdmin } = await requireAdmin(authHeader);
       if (!isAdmin) return json({ error: "Admin access required" }, 403);
     }
@@ -599,6 +682,13 @@ Deno.serve(async (req: Request) => {
         audience: body.audience === "department" ? "department" : "all",
         department_id: body.department_id,
       });
+      runQueue(adminClient, 50).catch(() => {});
+      return json(out);
+    }
+    if (action === "notify_exit_initiated") {
+      const body = await req.json().catch(() => ({}));
+      if (!body.case_id) return json({ error: "case_id required" }, 400);
+      const out = await notifyExitInitiated(adminClient, body.case_id);
       runQueue(adminClient, 50).catch(() => {});
       return json(out);
     }

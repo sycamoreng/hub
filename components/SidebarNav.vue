@@ -89,7 +89,8 @@ const baseGroups = computed<NavGroup[]>(() => [
       { to: '/branding', label: 'Branding', icon: 'palette' },
       { to: '/payroll', label: 'My Payroll', icon: 'card' },
       { to: '/finance', label: 'Advance & Loans', icon: 'card' },
-      { to: '/leave', label: 'Leave', icon: 'calendar' }
+      { to: '/leave', label: 'Leave', icon: 'calendar' },
+      { to: '/exit', label: 'Exit', icon: 'arrow-right' }
     ]
   },
   {
