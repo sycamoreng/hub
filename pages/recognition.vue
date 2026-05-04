@@ -3,8 +3,6 @@ import { useSupabase } from '~/utils/supabase'
 import { useGamification, colorClasses } from '~/composables/useGamification'
 import type { LeaderRow, KudosValue, Badge } from '~/composables/useGamification'
 
-definePageMeta({ middleware: ['auth'] })
-
 const { user } = useAuth()
 const supabase = useSupabase()
 const toast = useToast()

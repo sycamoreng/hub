@@ -2,8 +2,6 @@
 import { useSupabase } from '~/utils/supabase'
 import { useExit, type ExitCase, type ExitChecklistItem, type ExitUnit } from '~/composables/useExit'
 
-definePageMeta({ middleware: ['auth'] })
-
 const supabase = useSupabase()
 const { user } = useAuth()
 const toast = useToast()

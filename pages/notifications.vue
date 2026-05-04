@@ -1,6 +1,4 @@
 <script setup lang="ts">
-definePageMeta({ middleware: ['auth'] })
-
 const { user, ready } = useAuth()
 const { items, unreadCount, loaded, load, subscribe, unsubscribe, markRead, markAllRead, dismiss } = useNotifications()
 

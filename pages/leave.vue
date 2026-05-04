@@ -2,8 +2,6 @@
 import { useSupabase } from '~/utils/supabase'
 import { useLeave, computeWorkingDays, ymd, type LeaveType, type PublicHoliday } from '~/composables/useLeave'
 
-definePageMeta({ middleware: ['auth'] })
-
 const supabase = useSupabase()
 const { user } = useAuth()
 const toast = useToast()

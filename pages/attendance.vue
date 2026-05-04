@@ -5,8 +5,6 @@ import {
   durationHours, formatDuration, minutesLate, statusFor
 } from '~/composables/useAttendance'
 
-definePageMeta({ middleware: ['auth'] })
-
 const supabase = useSupabase()
 const { user } = useAuth()
 const toast = useToast()

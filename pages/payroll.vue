@@ -2,8 +2,6 @@
 import { useSupabase } from '~/utils/supabase'
 import { formatNaira, MONTH_NAMES } from '~/composables/usePayroll'
 
-definePageMeta({ middleware: ['auth'] })
-
 const supabase = useSupabase()
 const { user } = useAuth()
 const items = ref<any[]>([])

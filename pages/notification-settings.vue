@@ -1,5 +1,4 @@
 <script setup lang="ts">
-definePageMeta({ middleware: ['auth'] })
 import { useSupabase } from '~/utils/supabase'
 
 const { user } = useAuth()
