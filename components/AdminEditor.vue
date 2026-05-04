@@ -2,7 +2,7 @@
 type Field = {
   key: string
   label: string
-  type?: 'text' | 'textarea' | 'select' | 'checkbox' | 'date' | 'number' | 'email' | 'tel'
+  type?: 'text' | 'textarea' | 'select' | 'checkbox' | 'date' | 'number' | 'email' | 'tel' | 'multiselect'
   options?: { value: string, label: string }[]
   required?: boolean
   placeholder?: string
@@ -31,7 +31,7 @@ watch(() => [props.open, props.initial], () => {
     form.value = {}
     for (const f of props.fields) {
       const v = props.initial?.[f.key]
-      form.value[f.key] = v ?? (f.type === 'checkbox' ? false : '')
+      form.value[f.key] = v ?? (f.type === 'checkbox' ? false : f.type === 'multiselect' ? [] : '')
     }
     errors.value = {}
   }
@@ -103,6 +103,25 @@ function submit() {
                 <option value="" disabled>Select...</option>
                 <option v-for="o in f.options" :key="o.value" :value="o.value">{{ o.label }}</option>
               </select>
+
+              <div v-else-if="f.type === 'multiselect'" class="flex flex-wrap gap-2">
+                <label v-for="o in f.options" :key="o.value"
+                  class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm cursor-pointer hover:bg-slate-50">
+                  <input type="checkbox"
+                    :checked="Array.isArray(form[f.key]) && form[f.key].includes(o.value)"
+                    @change="(e) => {
+                      const arr = Array.isArray(form[f.key]) ? [...form[f.key]] : [];
+                      const checked = (e.target as HTMLInputElement).checked;
+                      const i = arr.indexOf(o.value);
+                      if (checked && i === -1) arr.push(o.value);
+                      if (!checked && i !== -1) arr.splice(i, 1);
+                      form[f.key] = arr;
+                    }"
+                    class="w-4 h-4 rounded border-slate-300 text-sycamore-600 focus:ring-sycamore-300" />
+                  <span class="text-slate-700">{{ o.label }}</span>
+                </label>
+                <span v-if="!f.options || f.options.length === 0" class="text-xs text-slate-500">No options configured.</span>
+              </div>
 
               <label
                 v-else-if="f.type === 'checkbox'"

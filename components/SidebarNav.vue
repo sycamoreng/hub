@@ -23,23 +23,39 @@ loadLocks()
 loadOrder()
 
 const standalone = computed<NavItem[]>(() => {
-  const items: NavItem[] = [
+  return [
     { to: '/', label: 'Home', icon: 'home' },
-    { to: '/feed', label: 'Feed', icon: 'chat' }
+    { to: '/feed', label: 'Feed', icon: 'chat' },
+    { to: '/attendance', label: 'Clock in', icon: 'clock' }
   ]
-  if (raffleVisible.value) {
-    items.push({ to: '/raffle', label: "Workers' Day Raffle", icon: 'sparkle' })
-  }
-  return items
 })
 
-const baseGroups: NavGroup[] = [
+const rewardsGroup = computed<NavGroup>(() => {
+  const items: NavItem[] = [
+    { to: '/recognition', label: 'Recognition', icon: 'star' },
+    { to: '/wordle', label: 'Daily Wordle', icon: 'sparkle' }
+  ]
+  if (raffleVisible.value) {
+    items.push({ to: '/raffle', label: "Workers' Day Raffle", icon: 'gift' })
+  }
+  return {
+    id: 'rewards',
+    label: 'Rewards & Play',
+    icon: 'star',
+    items
+  }
+})
+
+const baseGroups = computed<NavGroup[]>(() => [
+  rewardsGroup.value,
   {
     id: 'company',
     label: 'Company',
     icon: 'building',
     items: [
       { to: '/leadership', label: 'Leadership', icon: 'star' },
+      { to: '/organogram', label: 'Organogram', icon: 'users' },
+      { to: '/my-team', label: 'My Team', icon: 'users' },
       { to: '/departments', label: 'Departments', icon: 'building' },
       { to: '/locations', label: 'Locations', icon: 'map' },
       { to: '/staff', label: 'Staff Directory', icon: 'users' }
@@ -70,7 +86,10 @@ const baseGroups: NavGroup[] = [
     items: [
       { to: '/policies', label: 'Policies', icon: 'book' },
       { to: '/benefits', label: 'Benefits & Perks', icon: 'gift' },
-      { to: '/branding', label: 'Branding', icon: 'palette' }
+      { to: '/branding', label: 'Branding', icon: 'palette' },
+      { to: '/payroll', label: 'My Payroll', icon: 'card' },
+      { to: '/finance', label: 'Advance & Loans', icon: 'card' },
+      { to: '/leave', label: 'Leave', icon: 'calendar' }
     ]
   },
   {
@@ -83,17 +102,17 @@ const baseGroups: NavGroup[] = [
       { to: '/calendar', label: 'Calendar', icon: 'calendar' }
     ]
   }
-]
+])
 
 const orderedGroups = computed<NavGroup[]>(() => {
-  const byId = new Map(baseGroups.map(g => [g.id, g] as const))
+  const byId = new Map(baseGroups.value.map(g => [g.id, g] as const))
   const out: NavGroup[] = []
   const seen = new Set<string>()
   for (const id of sidebarOrder.value) {
     const g = byId.get(id)
     if (g) { out.push(g); seen.add(id) }
   }
-  for (const g of baseGroups) {
+  for (const g of baseGroups.value) {
     if (!seen.has(g.id)) out.push(g)
   }
   return out

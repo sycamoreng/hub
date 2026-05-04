@@ -17,7 +17,12 @@ const groups: NavGroup[] = [
       { to: '/admin/staff', label: 'Staff', icon: 'users', section: 'staff' },
       { to: '/admin/leadership', label: 'Leadership', icon: 'star', section: 'leadership' },
       { to: '/admin/departments', label: 'Departments', icon: 'building', section: 'departments' },
-      { to: '/admin/onboarding', label: 'Learning', icon: 'check', section: 'onboarding' }
+      { to: '/admin/teams', label: 'Teams', icon: 'users', section: 'departments' },
+      { to: '/admin/onboarding', label: 'Learning', icon: 'check', section: 'onboarding' },
+      { to: '/admin/payroll', label: 'Payroll', icon: 'card', section: 'payroll' },
+      { to: '/admin/finance', label: 'Finance Requests', icon: 'card', section: 'payroll' },
+      { to: '/admin/attendance', label: 'Attendance', icon: 'clock', section: 'attendance' },
+      { to: '/admin/leave', label: 'Leave', icon: 'calendar', section: 'attendance' }
     ]
   },
   {
@@ -43,7 +48,9 @@ const groups: NavGroup[] = [
       { to: '/admin/email', label: 'Email Settings', icon: 'info', section: 'email' },
       { to: '/admin/email-templates', label: 'Email Templates', icon: 'book', section: 'email-templates' },
       { to: '/admin/broadcast', label: 'Broadcast', icon: 'mail', section: 'broadcast' },
-      { to: '/admin/raffle', label: "Workers' Day Raffle", icon: 'sparkle' }
+      { to: '/admin/chat-spaces', label: 'Chat Spaces', icon: 'chat', section: 'communication' },
+      { to: '/admin/raffle', label: "Workers' Day Raffle", icon: 'sparkle' },
+      { to: '/admin/gamification', label: 'Gamification', icon: 'star', section: 'gamification' }
     ]
   },
   {

@@ -99,7 +99,16 @@ async function toggle(step: Step) {
     } else {
       await supabase.from('onboarding_progress').insert({ user_id: user.value.id, step_id: step.id })
       completed.value = { ...completed.value, [step.id]: true }
-      toast.success('Marked complete')
+      try {
+        await supabase.from('points_events').upsert({
+          user_id: user.value.id,
+          event_kind: 'onboarding_step_completed',
+          ref_type: 'step',
+          ref_id: step.id,
+          points: 10
+        }, { onConflict: 'user_id,event_kind,ref_type,ref_id', ignoreDuplicates: true })
+      } catch { /* non-fatal */ }
+      toast.success('Marked complete (+10 points)')
     }
   } catch (e: any) {
     toast.error(e.message ?? 'Failed to update progress')

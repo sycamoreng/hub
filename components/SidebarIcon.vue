@@ -88,6 +88,12 @@ defineProps<{ name: string }>()
     <template v-else-if="name === 'dot'">
       <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />
     </template>
+    <template v-else-if="name === 'card'">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9V6.75A2.25 2.25 0 0 1 4.5 4.5h15a2.25 2.25 0 0 1 2.25 2.25v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V9Zm3.75 6.75h1.5v.75H6v-.75Z" />
+    </template>
+    <template v-else-if="name === 'clock'">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </template>
     <template v-else>
       <circle cx="12" cy="12" r="9" />
     </template>

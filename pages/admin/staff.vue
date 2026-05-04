@@ -7,6 +7,8 @@ const { items, loading, load, create, update, remove } = useCrud('staff_members'
 const toast = useToast()
 const departments = ref<any[]>([])
 const locations = ref<any[]>([])
+const teams = ref<any[]>([])
+const managerCandidates = ref<any[]>([])
 
 const editorOpen = ref(false)
 const editing = ref<any | null>(null)
@@ -25,6 +27,18 @@ const fields = computed(() => [
     key: 'location_id', label: 'Location', type: 'select',
     options: [{ value: '', label: 'None' }, ...locations.value.map(l => ({ value: l.id, label: `${l.name} (${l.city})` }))]
   },
+  {
+    key: 'team_id', label: 'Team', type: 'select',
+    options: [{ value: '', label: 'None' }, ...teams.value
+      .filter(t => !editing.value?.department_id || t.department_id === editing.value.department_id)
+      .map(t => ({ value: t.id, label: t.name }))]
+  },
+  {
+    key: 'manager_id', label: 'Reports to', type: 'select',
+    options: [{ value: '', label: 'None' }, ...managerCandidates.value
+      .filter(m => m.id !== editing.value?.id)
+      .map(m => ({ value: m.id, label: `${m.full_name}${m.role ? ' — ' + m.role : ''}` }))]
+  },
   { key: 'joined_date', label: 'Joined date', type: 'date' },
   { key: 'bio', label: 'Bio', type: 'textarea' },
   { key: 'is_active', label: 'Active', type: 'checkbox', placeholder: 'Currently employed' }
@@ -41,12 +55,14 @@ const columns = [
 await Promise.all([
   load([{ column: 'full_name', ascending: true }]),
   (async () => { const { data } = await supabase.from('departments').select('id, name').order('name'); departments.value = data ?? [] })(),
-  (async () => { const { data } = await supabase.from('locations').select('id, name, city').order('name'); locations.value = data ?? [] })()
+  (async () => { const { data } = await supabase.from('locations').select('id, name, city').order('name'); locations.value = data ?? [] })(),
+  (async () => { const { data } = await supabase.from('teams').select('id, name, department_id').order('name'); teams.value = data ?? [] })(),
+  (async () => { const { data } = await supabase.from('staff_members').select('id, full_name, role, is_active').eq('is_active', true).order('full_name'); managerCandidates.value = data ?? [] })()
 ])
 
 function openNew() { editing.value = { is_active: true }; editorOpen.value = true }
 function openEdit(row: any) {
-  editing.value = { ...row, department_id: row.department_id ?? '', location_id: row.location_id ?? '', joined_date: row.joined_date ?? '' }
+  editing.value = { ...row, department_id: row.department_id ?? '', location_id: row.location_id ?? '', team_id: row.team_id ?? '', manager_id: row.manager_id ?? '', joined_date: row.joined_date ?? '' }
   editorOpen.value = true
 }
 
@@ -58,6 +74,7 @@ async function save(payload: Record<string, any>) {
     const data = {
       full_name: payload.full_name, email: payload.email, phone: payload.phone ?? '', role: payload.role,
       department_id: payload.department_id || null, location_id: payload.location_id || null,
+      team_id: payload.team_id || null, manager_id: payload.manager_id || null,
       joined_date: payload.joined_date || null, bio: payload.bio ?? '', is_active: !!payload.is_active
     }
     let staffId = editing.value?.id

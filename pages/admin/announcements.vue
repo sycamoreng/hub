@@ -10,10 +10,15 @@ const editorOpen = ref(false)
 const editing = ref<any | null>(null)
 const saving = ref(false)
 const departments = ref<{ id: string; name: string }[]>([])
+const chatSpaces = ref<{ id: string; name: string; is_active: boolean }[]>([])
 
 async function loadDepartments() {
   const { data } = await supabase.from('departments').select('id, name').order('name')
   departments.value = data ?? []
+}
+async function loadChatSpaces() {
+  const { data } = await supabase.from('google_chat_spaces').select('id, name, is_active').order('name')
+  chatSpaces.value = (data ?? []) as any
 }
 
 const fields = computed(() => [
@@ -45,6 +50,11 @@ const fields = computed(() => [
     key: 'email_department_id', label: 'Department', type: 'select',
     options: departments.value.map(d => ({ value: d.id, label: d.name })),
     hint: 'Used when audience is "Specific department".'
+  },
+  {
+    key: 'post_to_chat_space_ids', label: 'Post to Google Workspace', type: 'multiselect',
+    options: chatSpaces.value.filter(s => s.is_active).map(s => ({ value: s.id, label: s.name })),
+    hint: 'Pick which Google Chat spaces should receive this announcement when saved.'
   }
 ] as const)
 
@@ -55,7 +65,7 @@ const columns = [
   { key: 'created_at', label: 'Created', render: (r: any) => new Date(r.created_at).toLocaleDateString('en-GB') }
 ]
 
-await Promise.all([load([{ column: 'created_at', ascending: false }]), loadDepartments()])
+await Promise.all([load([{ column: 'created_at', ascending: false }]), loadDepartments(), loadChatSpaces()])
 
 function openNew() {
   editing.value = { email_audience: 'all', email_on_publish: false }
@@ -86,6 +96,22 @@ async function queueAnnouncementEmail(announcementId: string) {
   return body
 }
 
+async function broadcastToChat(announcementId: string) {
+  const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-chat-broadcast`
+  const { data: session } = await supabase.auth.getSession()
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.session?.access_token ?? ''}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ announcement_id: announcementId })
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.error || 'Failed to post to chat')
+  return body
+}
+
 async function runQueueNow() {
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/email/run_queue`
   const { data: session } = await supabase.auth.getSession()
@@ -112,7 +138,8 @@ async function save(payload: Record<string, any>) {
       expires_at: payload.expires_at ? new Date(payload.expires_at).toISOString() : null,
       email_on_publish: !!payload.email_on_publish,
       email_audience: payload.email_audience || 'all',
-      email_department_id: payload.email_department_id || null
+      email_department_id: payload.email_department_id || null,
+      post_to_chat_space_ids: Array.isArray(payload.post_to_chat_space_ids) ? payload.post_to_chat_space_ids : []
     }
     let id: string | undefined = editing.value?.id
     if (id) {
@@ -131,6 +158,14 @@ async function save(payload: Record<string, any>) {
       }
     } else {
       toast.success('Saved')
+    }
+    if (id && data.is_active && data.post_to_chat_space_ids?.length) {
+      try {
+        const res = await broadcastToChat(id)
+        if (res.sent > 0) toast.success(`Posted to ${res.sent} Google Chat space(s).`)
+      } catch (e: any) {
+        toast.error(e.message ?? 'Saved, but failed to post to Google Chat.')
+      }
     }
     editorOpen.value = false
   } catch (e: any) {

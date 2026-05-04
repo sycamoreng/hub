@@ -214,7 +214,17 @@ export function useFeed() {
       .select('*')
       .maybeSingle()
     if (error) throw error
-    return data as PostRow
+    const post = data as PostRow
+    try {
+      await supabase.from('points_events').upsert({
+        user_id: authorId,
+        event_kind: 'post_created',
+        ref_type: 'post',
+        ref_id: post.id,
+        points: 5
+      }, { onConflict: 'user_id,event_kind,ref_type,ref_id', ignoreDuplicates: true })
+    } catch { /* non-fatal */ }
+    return post
   }
 
   async function deletePost(postId: string) {
@@ -263,6 +273,21 @@ export function useFeed() {
         .from('reactions')
         .insert({ target_type: targetType, target_id: targetId, user_id: userId, emoji })
       if (error && !`${error.message}`.toLowerCase().includes('duplicate')) throw error
+      if (targetType === 'post') {
+        try {
+          const { data: post } = await supabase.from('posts').select('author_id').eq('id', targetId).maybeSingle()
+          const authorId = (post as any)?.author_id
+          if (authorId && authorId !== userId) {
+            await supabase.from('points_events').upsert({
+              user_id: authorId,
+              event_kind: 'reaction_received',
+              ref_type: 'reaction',
+              ref_id: `${targetId}:${userId}:${emoji}`,
+              points: 1
+            }, { onConflict: 'user_id,event_kind,ref_type,ref_id', ignoreDuplicates: true })
+          }
+        } catch { /* non-fatal */ }
+      }
     }
   }
 

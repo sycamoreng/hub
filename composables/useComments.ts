@@ -82,7 +82,17 @@ export function useComments() {
       .select('*')
       .maybeSingle()
     if (error) throw error
-    return data as CommentRow
+    const row = data as CommentRow
+    try {
+      await supabase.from('points_events').upsert({
+        user_id: args.userId,
+        event_kind: 'comment_posted',
+        ref_type: 'comment',
+        ref_id: row.id,
+        points: 2
+      }, { onConflict: 'user_id,event_kind,ref_type,ref_id', ignoreDuplicates: true })
+    } catch { /* non-fatal */ }
+    return row
   }
 
   async function updateComment(id: string, content: string): Promise<CommentRow> {

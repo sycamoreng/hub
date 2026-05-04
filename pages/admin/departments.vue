@@ -1,35 +1,44 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'admin', middleware: ['auth'] })
+import { useSupabase } from '~/utils/supabase'
 
+const supabase = useSupabase()
 const { items, loading, load, create, update, remove } = useCrud('departments')
 const toast = useToast()
 const editorOpen = ref(false)
 const editing = ref<any | null>(null)
 const saving = ref(false)
+const staff = ref<any[]>([])
 
-const fields = [
+const fields = computed(() => [
   { key: 'name', label: 'Name', required: true },
   { key: 'description', label: 'Description', type: 'textarea' },
-  { key: 'head_name', label: 'Department head' },
-  { key: 'head_title', label: 'Head title' },
-  { key: 'head_email', label: 'Head email', type: 'email' }
-] as const
+  { key: 'head_staff_id', label: 'Department head (staff)', type: 'select',
+    options: [{ value: '', label: 'None' }, ...staff.value.map((s: any) => ({ value: s.id, label: `${s.full_name}${s.role ? ' — ' + s.role : ''}` }))] },
+  { key: 'head_name', label: 'Head name (legacy)' },
+  { key: 'head_title', label: 'Head title (legacy)' },
+  { key: 'head_email', label: 'Head email (legacy)', type: 'email' }
+])
 
 const columns = [
   { key: 'name', label: 'Name' },
   { key: 'head_name', label: 'Head' }
 ]
 
-await load([{ column: 'name', ascending: true }])
+await Promise.all([
+  load([{ column: 'name', ascending: true }]),
+  (async () => { const { data } = await supabase.from('staff_members').select('id, full_name, role, is_active').eq('is_active', true).order('full_name'); staff.value = data ?? [] })()
+])
 
 function openNew() { editing.value = null; editorOpen.value = true }
-function openEdit(row: any) { editing.value = { ...row }; editorOpen.value = true }
+function openEdit(row: any) { editing.value = { ...row, head_staff_id: row.head_staff_id ?? '' }; editorOpen.value = true }
 
 async function save(payload: Record<string, any>) {
   saving.value = true
   try {
     const data = {
       name: payload.name, description: payload.description ?? '',
+      head_staff_id: payload.head_staff_id || null,
       head_name: payload.head_name ?? '', head_title: payload.head_title ?? '',
       head_email: payload.head_email ?? ''
     }

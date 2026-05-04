@@ -15,12 +15,15 @@ export function useCompanyData() {
   async function fetchDepartments() {
     const { data, error } = await supabase
       .from('departments')
-      .select('*, staff_members(count)')
+      .select('*, staff_members!staff_members_department_id_fkey(count), head:staff_members!departments_head_staff_id_fkey(id, full_name, email, role)')
       .order('name')
     if (error) throw error
     return (data ?? []).map((d: any) => ({
       ...d,
-      staff_count: d.staff_members?.[0]?.count ?? 0
+      staff_count: d.staff_members?.[0]?.count ?? 0,
+      head_name: d.head?.full_name || d.head_name || '',
+      head_title: d.head?.role || d.head_title || '',
+      head_email: d.head?.email || d.head_email || ''
     }))
   }
 
@@ -40,7 +43,7 @@ export function useCompanyData() {
   async function fetchStaff() {
     const { data, error } = await supabase
       .from('staff_members')
-      .select('*, departments(name), locations(name, city)')
+      .select('*, departments!staff_members_department_id_fkey(name), locations(name, city)')
       .eq('is_active', true)
       .order('full_name')
     if (error) throw error

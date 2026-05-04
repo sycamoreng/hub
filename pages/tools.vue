@@ -15,7 +15,7 @@ onMounted(async () => {
     const [toolsRes, deptRes, deptsRes] = await Promise.all([
       supabase.from('quick_tools').select('*').eq('is_active', true).order('sort_order').order('name'),
       user.value
-        ? supabase.from('staff_members').select('departments(name)').eq('auth_user_id', user.value.id).maybeSingle()
+        ? supabase.from('staff_members').select('departments!staff_members_department_id_fkey(name)').eq('auth_user_id', user.value.id).maybeSingle()
         : Promise.resolve({ data: null }),
       supabase.from('departments').select('id, name').order('name')
     ])

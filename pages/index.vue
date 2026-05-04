@@ -31,7 +31,7 @@ onMounted(async () => {
       fetchAnnouncements(), fetchHolidaysEvents(), fetchPosts(6),
       supabase.from('quick_tools').select('*').eq('is_active', true).order('sort_order').order('name'),
       user.value
-        ? supabase.from('staff_members').select('departments(name)').eq('auth_user_id', user.value.id).maybeSingle()
+        ? supabase.from('staff_members').select('departments!staff_members_department_id_fkey(name)').eq('auth_user_id', user.value.id).maybeSingle()
         : Promise.resolve({ data: null })
     ])
     quickTools.value = qt.data ?? []
@@ -173,6 +173,25 @@ const visibleQuickTools = computed(() => {
           </NuxtLink>
         </div>
       </div>
+    </section>
+
+    <section class="grid lg:grid-cols-3 gap-4">
+      <div class="lg:col-span-2"><DailySpark /></div>
+      <NuxtLink to="/wordle" class="group relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-emerald-500 via-teal-500 to-sycamore-600 text-white flex flex-col justify-between min-h-[140px]">
+        <div class="absolute -top-4 -right-4 w-32 h-32 rounded-full bg-white/10 blur-xl"></div>
+        <div class="relative">
+          <div class="text-[11px] uppercase tracking-[0.2em] font-bold text-white/80">Today's Wordle</div>
+          <h3 class="mt-1 text-xl font-bold leading-tight">Guess the word. Earn points.</h3>
+        </div>
+        <div class="relative flex items-center gap-1 mt-3">
+          <span class="w-7 h-7 rounded bg-emerald-300/80 border-2 border-white/40"></span>
+          <span class="w-7 h-7 rounded bg-amber-300/80 border-2 border-white/40"></span>
+          <span class="w-7 h-7 rounded bg-white/20 border-2 border-white/40"></span>
+          <span class="w-7 h-7 rounded bg-white/20 border-2 border-white/40"></span>
+          <span class="w-7 h-7 rounded bg-white/20 border-2 border-white/40"></span>
+          <span class="ml-auto text-xs font-semibold inline-flex items-center gap-1 group-hover:gap-2 transition-all">Play <SidebarIcon name="arrow-right" /></span>
+        </div>
+      </NuxtLink>
     </section>
 
     <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
