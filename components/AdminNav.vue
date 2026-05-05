@@ -23,7 +23,8 @@ const groups: NavGroup[] = [
       { to: '/admin/finance', label: 'Finance Requests', icon: 'card', section: 'payroll' },
       { to: '/admin/attendance', label: 'Attendance', icon: 'clock', section: 'attendance' },
       { to: '/admin/leave', label: 'Leave', icon: 'calendar', section: 'attendance' },
-      { to: '/admin/exits', label: 'Exits', icon: 'arrow-right', section: 'exits' }
+      { to: '/admin/exits', label: 'Exits', icon: 'arrow-right', section: 'exits' },
+      { to: '/admin/performance', label: 'Performance', icon: 'check', section: 'performance' }
     ]
   },
   {

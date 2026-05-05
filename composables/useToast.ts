@@ -62,12 +62,18 @@ export function useToast() {
     confirmState.value = { ...confirmState.value, open: false, resolve: null }
   }
 
+  function pushLegacy(opts: { type?: ToastVariant; variant?: ToastVariant; title?: string; message?: string; duration?: number }) {
+    const variant = opts.type ?? opts.variant ?? 'info'
+    return push(variant, opts.message ?? '', { title: opts.title, duration: opts.duration })
+  }
+
   return {
     items,
     confirmState,
     dismiss,
     confirm,
     resolveConfirm,
+    push: pushLegacy,
     success: (message: string, opts?: { title?: string; duration?: number }) => push('success', message, opts),
     error: (message: string, opts?: { title?: string; duration?: number }) => push('error', message, opts),
     info: (message: string, opts?: { title?: string; duration?: number }) => push('info', message, opts),

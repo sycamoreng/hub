@@ -31,6 +31,7 @@ const pages: PageEntry[] = [
   { path: '/payroll', label: 'My Payroll', group: 'People & Culture' },
   { path: '/finance', label: 'Advance & Loans', group: 'People & Culture' },
   { path: '/leave', label: 'Leave', group: 'People & Culture' },
+  { path: '/performance', label: 'My Performance', group: 'People & Culture' },
   { path: '/exit', label: 'Exit', group: 'People & Culture' },
   { path: '/communication', label: 'Communication', group: 'Communication' },
   { path: '/contacts', label: 'Key Contacts', group: 'Communication' },
