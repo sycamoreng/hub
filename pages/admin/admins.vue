@@ -47,7 +47,12 @@ const SECTIONS = [
   { key: 'benefits', label: 'Benefits' },
   { key: 'company', label: 'Company Info' },
   { key: 'exits', label: 'Exits' },
-  { key: 'performance', label: 'Performance' }
+  { key: 'performance', label: 'Performance' },
+  { key: 'appointments', label: 'Appointments' },
+  { key: 'payroll', label: 'Payroll & Finance' },
+  { key: 'attendance', label: 'Attendance & Leave' },
+  { key: 'gamification', label: 'Gamification' },
+  { key: 'raffle', label: 'Raffle' }
 ]
 const ACTIONS: CrudAction[] = ['create', 'read', 'update', 'delete']
 

@@ -24,7 +24,8 @@ const groups: NavGroup[] = [
       { to: '/admin/attendance', label: 'Attendance', icon: 'clock', section: 'attendance' },
       { to: '/admin/leave', label: 'Leave', icon: 'calendar', section: 'attendance' },
       { to: '/admin/exits', label: 'Exits', icon: 'arrow-right', section: 'exits' },
-      { to: '/admin/performance', label: 'Performance', icon: 'check', section: 'performance' }
+      { to: '/admin/performance', label: 'Performance', icon: 'check', section: 'performance' },
+      { to: '/admin/appointments', label: 'Appointments', icon: 'calendar', section: 'appointments' }
     ]
   },
   {
@@ -51,7 +52,7 @@ const groups: NavGroup[] = [
       { to: '/admin/email-templates', label: 'Email Templates', icon: 'book', section: 'email-templates' },
       { to: '/admin/broadcast', label: 'Broadcast', icon: 'mail', section: 'broadcast' },
       { to: '/admin/chat-spaces', label: 'Chat Spaces', icon: 'chat', section: 'communication' },
-      { to: '/admin/raffle', label: "Workers' Day Raffle", icon: 'sparkle' },
+      { to: '/admin/raffle', label: "Workers' Day Raffle", icon: 'sparkle', section: 'raffle' },
       { to: '/admin/gamification', label: 'Gamification', icon: 'star', section: 'gamification' }
     ]
   },
@@ -62,6 +63,8 @@ const groups: NavGroup[] = [
     items: [
       { to: '/admin/policies', label: 'Policies', icon: 'book', section: 'policies' },
       { to: '/admin/benefits', label: 'Benefits', icon: 'gift', section: 'benefits' },
+      { to: '/admin/hmo', label: 'HMO Providers', icon: 'gift', section: 'benefits' },
+      { to: '/admin/learning-budgets', label: 'Learning Budgets', icon: 'card', section: 'benefits' },
       { to: '/admin/branding', label: 'Branding', icon: 'palette', section: 'branding' },
       { to: '/admin/locations', label: 'Locations', icon: 'map', section: 'locations' },
       { to: '/admin/company', label: 'Company Info', icon: 'star', section: 'company' }

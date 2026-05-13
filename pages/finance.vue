@@ -9,9 +9,11 @@ const toast = useToast()
 const items = ref<any[]>([])
 const loading = ref(true)
 const staffId = ref<string | null>(null)
+const monthlyNetSalary = ref<number>(0)
 
 const form = ref({
   type: 'advance' as 'advance' | 'loan',
+  loan_category: 'personal' as 'personal' | 'asset',
   amount: '' as string,
   repayment_months: 1,
   reason: ''
@@ -24,10 +26,11 @@ async function load() {
     if (!user.value) return
     const { data: staff } = await supabase
       .from('staff_members')
-      .select('id')
+      .select('id, monthly_net_salary')
       .eq('auth_user_id', user.value.id)
       .maybeSingle()
     staffId.value = (staff as any)?.id ?? null
+    monthlyNetSalary.value = Number((staff as any)?.monthly_net_salary ?? 0)
     const { data } = await supabase
       .from('finance_requests')
       .select('*')
@@ -44,6 +47,18 @@ watch(() => form.value.type, (t) => {
   if (t === 'advance') form.value.repayment_months = 1
 })
 
+function statusLabel(r: any): string {
+  if (r.status === 'pending') {
+    if (r.hc_status === 'approved') return 'Awaiting Finance'
+    return 'Awaiting HC'
+  }
+  if (r.status === 'hc_approved') return 'Awaiting Finance'
+  if (r.status === 'approved') return 'Approved'
+  if (r.status === 'rejected') return 'Rejected'
+  if (r.status === 'cancelled') return 'Cancelled'
+  return r.status
+}
+
 async function submit() {
   if (!user.value) return
   const amt = Number(form.value.amount)
@@ -51,18 +66,20 @@ async function submit() {
   if (!form.value.reason.trim()) { toast.error('Please add a reason'); return }
   saving.value = true
   try {
-    const payload = {
+    const payload: any = {
       staff_id: staffId.value,
       requester_user_id: user.value.id,
       type: form.value.type,
       amount: amt,
       repayment_months: form.value.type === 'advance' ? 1 : Math.max(1, Math.min(36, Number(form.value.repayment_months) || 1)),
       reason: form.value.reason.trim(),
-      status: 'pending'
+      status: 'pending',
+      monthly_net_salary: monthlyNetSalary.value,
+      loan_category: form.value.type === 'loan' ? form.value.loan_category : ''
     }
     const { error } = await supabase.from('finance_requests').insert(payload)
     if (error) throw error
-    form.value = { type: 'advance', amount: '', repayment_months: 1, reason: '' }
+    form.value = { type: 'advance', loan_category: 'personal', amount: '', repayment_months: 1, reason: '' }
     toast.success('Request submitted')
     await load()
   } catch (e: any) {
@@ -105,12 +122,23 @@ function statusClass(s: string) {
 
     <section class="bg-white border border-slate-200 rounded-xl p-5 mb-8">
       <h2 class="text-sm font-semibold text-slate-900 mb-4">New request</h2>
+      <p class="text-xs text-slate-500 mb-3">
+        Recorded monthly net salary:
+        <span class="font-semibold text-slate-700">{{ monthlyNetSalary > 0 ? formatNaira(monthlyNetSalary) : 'not set — please ask HC to update' }}</span>
+      </p>
       <form class="grid sm:grid-cols-2 gap-4" @submit.prevent="submit">
         <label class="block">
           <span class="text-xs font-medium text-slate-600">Type</span>
           <select v-model="form.type" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
             <option value="advance">Salary advance</option>
             <option value="loan">Loan</option>
+          </select>
+        </label>
+        <label v-if="form.type === 'loan'" class="block">
+          <span class="text-xs font-medium text-slate-600">Loan category</span>
+          <select v-model="form.loan_category" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="personal">Personal loan</option>
+            <option value="asset">Asset loan</option>
           </select>
         </label>
         <label class="block">
@@ -153,11 +181,13 @@ function statusClass(s: string) {
         <tbody>
           <tr v-for="r in items" :key="r.id" class="border-t border-slate-100">
             <td class="px-5 py-3 text-slate-700">{{ new Date(r.created_at).toLocaleDateString('en-GB') }}</td>
-            <td class="px-5 py-3 capitalize">{{ r.type }}</td>
+            <td class="px-5 py-3 capitalize">
+              {{ r.type }}<span v-if="r.type === 'loan' && r.loan_category" class="text-xs text-slate-500 ml-1">· {{ r.loan_category }}</span>
+            </td>
             <td class="px-5 py-3 text-right tabular-nums">{{ formatNaira(r.amount) }}</td>
             <td class="px-5 py-3 text-right tabular-nums">{{ r.repayment_months }}</td>
             <td class="px-5 py-3">
-              <span class="text-xs font-semibold px-2 py-0.5 rounded border capitalize" :class="statusClass(r.status)">{{ r.status }}</span>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded border" :class="statusClass(r.status)">{{ statusLabel(r) }}</span>
             </td>
             <td class="px-5 py-3 text-right">
               <button v-if="r.status === 'pending'" type="button" @click="cancel(r)" class="text-rose-600 font-medium text-xs">Cancel</button>

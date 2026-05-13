@@ -162,12 +162,9 @@ async function maybeAutoComplete() {
   if (!selectedCase.value) return
   if (!items.value.length) return
   const allDone = items.value.every(i => i.status === 'done' || i.status === 'not_applicable')
-  if (allDone && selectedCase.value.status !== 'completed') {
-    await supabase.from('exit_cases').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', selectedCase.value.id)
-    toast.success('All tasks completed — case marked completed.')
-    await load()
-    const refreshed = cases.value.find(c => c.id === selectedCase.value.id)
-    if (refreshed) selectedCase.value = refreshed
+  if (allDone && selectedCase.value.status === 'in_progress') {
+    // Wait for HC final confirmation rather than auto-completing.
+    return
   } else if (!allDone && selectedCase.value.status === 'initiated') {
     await supabase.from('exit_cases').update({ status: 'in_progress' }).eq('id', selectedCase.value.id)
     await load()
@@ -179,6 +176,42 @@ async function maybeAutoComplete() {
 async function assignItem(item: ExitChecklistItem, newAssignee: string) {
   await updateItem(item, { assignee_user_id: newAssignee || null })
 }
+
+async function downloadDoc(path: string, label: string) {
+  if (!path) return
+  try {
+    const { data, error } = await supabase.storage.from('exit-documents').createSignedUrl(path, 60)
+    if (error) throw error
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+  } catch (e: any) {
+    toast.error(`Could not open ${label}`)
+  }
+}
+
+async function hcFinalConfirm() {
+  if (!selectedCase.value || !user.value) return
+  try {
+    const { error } = await supabase.from('exit_cases').update({
+      hc_final_confirmed_at: new Date().toISOString(),
+      hc_final_confirmed_by: user.value.id,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq('id', selectedCase.value.id)
+    if (error) throw error
+    toast.success('HC has confirmed final clearance.')
+    await load()
+    const refreshed = cases.value.find(c => c.id === selectedCase.value!.id)
+    if (refreshed) selectedCase.value = refreshed
+  } catch (e: any) {
+    toast.error(e.message ?? 'Failed')
+  }
+}
+
+const allClearancesDone = computed(() => {
+  if (!items.value.length) return false
+  return items.value.every(i => i.status === 'done' || i.status === 'not_applicable')
+})
 
 async function setCaseStatus(status: 'in_progress' | 'completed' | 'cancelled') {
   if (!selectedCase.value) return
@@ -327,6 +360,31 @@ function statusChip(s: string) {
         <div v-if="selectedCase.reason" class="px-5 py-3 border-b border-slate-100 text-sm text-slate-700">
           <div class="text-xs font-semibold text-slate-500 mb-1">Reason</div>
           {{ selectedCase.reason }}
+        </div>
+
+        <div v-if="selectedCase.resignation_letter_url || selectedCase.handover_notes_url || selectedCase.handover_summary"
+             class="px-5 py-3 border-b border-slate-100 text-sm text-slate-700 space-y-2">
+          <div class="text-xs font-semibold text-slate-500">Documents &amp; handover</div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button v-if="selectedCase.resignation_letter_url" type="button" @click="downloadDoc(selectedCase.resignation_letter_url, 'resignation letter')"
+              class="text-xs font-semibold px-2.5 py-1 rounded bg-slate-900 text-white hover:bg-slate-800">Resignation letter</button>
+            <button v-if="selectedCase.handover_notes_url" type="button" @click="downloadDoc(selectedCase.handover_notes_url, 'handover note')"
+              class="text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 text-slate-700 hover:bg-slate-200">Handover note</button>
+          </div>
+          <div v-if="selectedCase.handover_summary" class="text-xs whitespace-pre-wrap text-slate-600">{{ selectedCase.handover_summary }}</div>
+        </div>
+
+        <div v-if="allClearancesDone && !selectedCase.hc_final_confirmed_at && selectedCase.status !== 'completed' && selectedCase.status !== 'cancelled'"
+             class="px-5 py-3 border-b border-slate-100 bg-leaf-50 flex items-center justify-between gap-3 flex-wrap">
+          <div class="text-sm text-leaf-900">
+            All units have cleared this exit. Human Capital can confirm to close the case.
+          </div>
+          <button type="button" @click="hcFinalConfirm" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+            HC final confirmation
+          </button>
+        </div>
+        <div v-else-if="selectedCase.hc_final_confirmed_at" class="px-5 py-3 border-b border-slate-100 bg-emerald-50/60 text-xs text-emerald-800">
+          HC confirmed clearance on {{ new Date(selectedCase.hc_final_confirmed_at).toLocaleString() }}.
         </div>
 
         <div v-if="selectedLoading" class="p-6 text-sm text-slate-500">Loading checklist...</div>

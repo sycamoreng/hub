@@ -618,6 +618,44 @@ async function testSend(adminClient: ReturnType<typeof createClient>, to: string
   return { sent: true, messageId };
 }
 
+async function notifyUser(adminClient: ReturnType<typeof createClient>, args: {
+  user_id: string;
+  title: string;
+  body_html: string;
+  link_path?: string;
+  link_label?: string;
+  trigger?: string;
+}) {
+  const settings = await getSettings(adminClient);
+  if (!settings || (settings as any).default_enabled === false) return { queued: 0 };
+  const { data: staff } = await adminClient
+    .from("staff_members")
+    .select("id, full_name, email, auth_user_id")
+    .eq("auth_user_id", args.user_id)
+    .maybeSingle();
+  if (!staff || !(staff as any).email) return { queued: 0 };
+  const prefs = await ensurePrefs(adminClient, args.user_id);
+  if (prefs && (prefs as any).email_broadcasts === false) return { queued: 0 };
+  const appUrl = await appBaseUrlFromSettings(adminClient);
+  const base = {
+    first_name: firstName((staff as any).full_name),
+    title: args.title,
+    body_html: args.body_html || "",
+    link_url: args.link_path ? `${appUrl.replace(/\/$/, "")}${args.link_path}` : appUrl,
+    link_label: args.link_label || "Open Sycamore Info Hub",
+  };
+  const vars = buildVars(base, settings, (prefs as any)?.unsubscribe_token ?? "", appUrl);
+  const ok = await queueFromTemplate(
+    adminClient,
+    "staff_notification",
+    { email: (staff as any).email, name: (staff as any).full_name, user_id: args.user_id, unsubscribe_token: (prefs as any)?.unsubscribe_token ?? null },
+    vars,
+    args.trigger || "staff_notification",
+    { user_id: args.user_id },
+  );
+  return { queued: ok ? 1 : 0 };
+}
+
 function isServiceRoleBearer(authHeader: string) {
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -640,7 +678,7 @@ Deno.serve(async (req: Request) => {
 
     const isService = isServiceRoleBearer(authHeader);
     const systemActions = new Set(["run_queue", "daily_reminders", "weekly_digest"]);
-    const authenticatedActions = new Set(["notify_exit_initiated", "unsubscribe"]);
+    const authenticatedActions = new Set(["notify_exit_initiated", "unsubscribe", "notify_user"]);
 
     if (!isService && !authenticatedActions.has(action)) {
       const { admin: isAdmin } = await requireAdmin(authHeader);
@@ -689,6 +727,20 @@ Deno.serve(async (req: Request) => {
       const body = await req.json().catch(() => ({}));
       if (!body.case_id) return json({ error: "case_id required" }, 400);
       const out = await notifyExitInitiated(adminClient, body.case_id);
+      runQueue(adminClient, 50).catch(() => {});
+      return json(out);
+    }
+    if (action === "notify_user") {
+      const body = await req.json().catch(() => ({}));
+      if (!body.user_id || !body.title) return json({ error: "user_id and title required" }, 400);
+      const out = await notifyUser(adminClient, {
+        user_id: body.user_id,
+        title: body.title,
+        body_html: body.body_html ?? "",
+        link_path: body.link_path,
+        link_label: body.link_label,
+        trigger: body.trigger,
+      });
       runQueue(adminClient, 50).catch(() => {});
       return json(out);
     }

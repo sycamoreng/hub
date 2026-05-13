@@ -175,6 +175,8 @@ const visibleQuickTools = computed(() => {
       </div>
     </section>
 
+    <QuickShortcuts />
+
     <section class="grid lg:grid-cols-3 gap-4">
       <div class="lg:col-span-2"><DailySpark /></div>
       <NuxtLink to="/wordle" class="group relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-emerald-500 via-teal-500 to-sycamore-600 text-white flex flex-col justify-between min-h-[140px]">

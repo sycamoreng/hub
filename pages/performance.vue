@@ -20,7 +20,7 @@ import {
 const supabase = useSupabase()
 const toast = useToast()
 const { user } = useAuth()
-const { loadCycles, loadPrimaryCycle, loadObjectives, loadMeasures, saveObjective, deleteObjective, saveMeasure, loadReviews, saveReview, loadRecognitions, saveRecognition, loadPips, loadPipCheckins, saveCheckin } = usePerformance()
+const { loadCycles, loadPrimaryCycle, loadObjectives, loadMeasures, saveObjective, deleteObjective, saveMeasure, loadReviews, saveReview, loadRecognitions, saveRecognition, loadPips, loadPipCheckins, saveCheckin, loadAppraisalForSubject, loadObjectiveTemplates, adoptObjectiveTemplate } = usePerformance()
 
 type Tab = 'objectives' | 'reviews' | 'team' | 'recognition'
 
@@ -38,7 +38,118 @@ const myRecognitions = ref<any[]>([])
 const myPips = ref<any[]>([])
 const expandedPipId = ref<string>('')
 const myPipCheckins = ref<any[]>([])
+const myAppraisal = ref<any>(null)
+const objectiveTemplates = ref<any[]>([])
+const adoptingTemplateId = ref<string>('')
+
+const adoptedTemplateTitles = computed(() => new Set(objectives.value.map((o: any) => (o.title ?? '').toLowerCase())))
+const availableTemplates = computed(() => {
+  const deptId = staffRow.value?.department_id ?? null
+  return objectiveTemplates.value.filter((t: any) => {
+    if (!t.is_active) return false
+    if (t.scope === 'department' && t.department_id && t.department_id !== deptId) return false
+    if (adoptedTemplateTitles.value.has((t.title ?? '').toLowerCase())) return false
+    return true
+  })
+})
+
+async function reloadTemplates() {
+  if (!selectedCycleId.value) { objectiveTemplates.value = []; return }
+  const all = await loadObjectiveTemplates({ cycleId: selectedCycleId.value })
+  const cycleless = await loadObjectiveTemplates({})
+  const merged = [...all, ...cycleless.filter((t: any) => !t.cycle_id)]
+  const seen = new Set<string>()
+  objectiveTemplates.value = merged.filter((t: any) => {
+    if (seen.has(t.id)) return false
+    seen.add(t.id)
+    return true
+  })
+}
+
+async function adoptTemplate(t: any) {
+  if (!staffRow.value || !selectedCycleId.value) return
+  adoptingTemplateId.value = t.id
+  try {
+    await adoptObjectiveTemplate(t.id, staffRow.value.id, selectedCycleId.value)
+    toast.success(`Adopted "${t.title}"`)
+    await reloadObjectives()
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not adopt')
+  } finally {
+    adoptingTemplateId.value = ''
+  }
+}
 const responseDraft = ref<Record<string, string>>({})
+
+const DRAFT_STORAGE_KEY = 'performance:drafts:v1'
+type DraftPayload = {
+  responseDraft?: Record<string, string>
+  objectiveForm?: any
+  objectiveOpen?: boolean
+  inviteForm?: any
+  inviteOpen?: boolean
+  recogniseForm?: any
+  recogniseOpen?: boolean
+  tab?: Tab
+  selectedCycleId?: string
+  expandedReportId?: string
+  savedAt?: string
+}
+const hasUnsavedDrafts = computed(() => {
+  const hasTypedResponse = Object.values(responseDraft.value).some(v => (v ?? '').trim().length > 0)
+  const o = objectiveForm.value
+  const hasObjectiveDraft = objectiveOpen.value || !!(o?.title || o?.description || o?.target_value)
+  const i = inviteForm.value
+  const hasInviteDraft = inviteOpen.value || !!(i?.subject_staff_id || i?.reviewer_staff_id || i?.due_at)
+  const r = recogniseForm.value
+  const hasRecogniseDraft = recogniseOpen.value || !!(r?.subject_staff_id || r?.title || r?.summary || r?.impact)
+  return hasTypedResponse || hasObjectiveDraft || hasInviteDraft || hasRecogniseDraft
+})
+
+function saveDraftsToStorage() {
+  if (typeof window === 'undefined') return
+  const payload: DraftPayload = {
+    responseDraft: responseDraft.value,
+    objectiveForm: objectiveForm.value,
+    objectiveOpen: objectiveOpen.value,
+    inviteForm: inviteForm.value,
+    inviteOpen: inviteOpen.value,
+    recogniseForm: recogniseForm.value,
+    recogniseOpen: recogniseOpen.value,
+    tab: tab.value,
+    selectedCycleId: selectedCycleId.value,
+    expandedReportId: expandedReportId.value,
+    savedAt: new Date().toISOString()
+  }
+  try { window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload)) } catch {}
+}
+
+function restoreDraftsFromStorage() {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY)
+    if (!raw) return
+    const d = JSON.parse(raw) as DraftPayload
+    if (d.responseDraft) responseDraft.value = d.responseDraft
+    if (d.objectiveForm) objectiveForm.value = { ...objectiveForm.value, ...d.objectiveForm }
+    if (d.objectiveOpen) objectiveOpen.value = d.objectiveOpen
+    if (d.inviteForm) inviteForm.value = { ...inviteForm.value, ...d.inviteForm }
+    if (d.inviteOpen) inviteOpen.value = d.inviteOpen
+    if (d.recogniseForm) recogniseForm.value = { ...recogniseForm.value, ...d.recogniseForm }
+    if (d.recogniseOpen) recogniseOpen.value = d.recogniseOpen
+    if (d.tab) tab.value = d.tab
+    if (d.selectedCycleId) selectedCycleId.value = d.selectedCycleId
+    if (d.expandedReportId) expandedReportId.value = d.expandedReportId
+    if (hasUnsavedDrafts.value) {
+      toast.push({ type: 'info', title: 'Drafts restored', message: 'Picked up where you left off.' })
+    }
+  } catch {}
+}
+
+function clearDraftStorage() {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.removeItem(DRAFT_STORAGE_KEY) } catch {}
+}
 
 // Team (manager) view
 const directReports = ref<any[]>([])
@@ -128,6 +239,8 @@ async function loadAll() {
     await Promise.all([
       reloadObjectives(),
       reloadReviews(),
+      reloadAppraisal(),
+      reloadTemplates(),
       loadDirectReports()
     ])
   } finally {
@@ -190,6 +303,7 @@ async function saveStaffResponse(c: any) {
   try {
     await saveCheckin({ id: c.id, staff_response: text })
     toast.push({ type: 'success', title: 'Response saved', message: '' })
+    delete responseDraft.value[c.id]
     myPipCheckins.value = await loadPipCheckins(c.pip_id)
   } catch (e: any) {
     toast.push({ type: 'error', title: 'Could not save', message: e?.message ?? 'Unexpected error' })
@@ -206,12 +320,52 @@ async function reloadObjectives() {
   measuresByObjective.value = map
 }
 
+async function reloadAppraisal() {
+  if (!staffRow.value || !selectedCycleId.value) { myAppraisal.value = null; return }
+  myAppraisal.value = await loadAppraisalForSubject(selectedCycleId.value, staffRow.value.id)
+}
+
 watch(selectedCycleId, async () => {
   await reloadObjectives()
+  await reloadAppraisal()
+  await reloadTemplates()
   if (tab.value === 'team') await reloadTeam()
 })
 
-onMounted(loadAll)
+onMounted(async () => {
+  await loadAll()
+  restoreDraftsFromStorage()
+})
+
+watch([responseDraft, objectiveForm, objectiveOpen, inviteForm, inviteOpen, recogniseForm, recogniseOpen, tab, selectedCycleId, expandedReportId], () => {
+  saveDraftsToStorage()
+}, { deep: true })
+
+if (typeof window !== 'undefined') {
+  const beforeUnload = (e: BeforeUnloadEvent) => {
+    saveDraftsToStorage()
+    if (hasUnsavedDrafts.value) {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+  }
+  window.addEventListener('beforeunload', beforeUnload)
+  onBeforeUnmount(() => {
+    saveDraftsToStorage()
+    window.removeEventListener('beforeunload', beforeUnload)
+  })
+}
+
+onBeforeRouteLeave((_to, _from, next) => {
+  saveDraftsToStorage()
+  if (hasUnsavedDrafts.value) {
+    const ok = typeof window !== 'undefined'
+      ? window.confirm('You have unsaved drafts on this page. They will be kept locally and restored when you return. Leave now?')
+      : true
+    if (!ok) return next(false)
+  }
+  next()
+})
 
 const selectedCycle = computed(() => cycles.value.find(c => c.id === selectedCycleId.value) ?? null)
 const canUpdate = computed(() => {
@@ -577,6 +731,47 @@ function cycleObjectiveProgress(staffId: string) {
           </div>
         </div>
 
+        <article v-if="myAppraisal" class="card p-5 sm:p-6">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h3 class="text-base font-semibold text-slate-900">Your appraisal</h3>
+              <p class="text-xs text-slate-500 mt-0.5">
+                Status:
+                <span class="font-medium text-slate-700">{{ myAppraisal.status.replace('_', ' ') }}</span>
+                <template v-if="myAppraisal.appraiser">
+                  · Appraiser: <span class="font-medium text-slate-700">{{ myAppraisal.appraiser.full_name }}</span>
+                </template>
+              </p>
+            </div>
+            <div v-if="myAppraisal.rating_label" class="text-right">
+              <div class="text-[11px] uppercase tracking-wide text-slate-400">Rating</div>
+              <div class="text-base font-bold text-sycamore-700">{{ myAppraisal.rating_label }}</div>
+              <div v-if="myAppraisal.rating_tag" class="text-xs text-slate-500">{{ myAppraisal.rating_tag }}</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-3 mt-4">
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div class="text-[11px] uppercase tracking-wide text-slate-500">Objective</div>
+              <div class="text-xl font-bold text-slate-900">{{ Number(myAppraisal.objective_score).toFixed(2) }}</div>
+              <div class="text-[11px] text-slate-400">weight {{ Number(myAppraisal.objective_weight).toFixed(0) }}%</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div class="text-[11px] uppercase tracking-wide text-slate-500">Behavioural</div>
+              <div class="text-xl font-bold text-slate-900">{{ Number(myAppraisal.behavioural_score).toFixed(2) }}</div>
+              <div class="text-[11px] text-slate-400">weight {{ Number(myAppraisal.behavioural_weight).toFixed(0) }}%</div>
+            </div>
+            <div class="rounded-xl border border-sycamore-200 bg-sycamore-50 p-3">
+              <div class="text-[11px] uppercase tracking-wide text-sycamore-700">Final</div>
+              <div class="text-xl font-bold text-sycamore-900">{{ Number(myAppraisal.final_score).toFixed(2) }}</div>
+              <div class="text-[11px] text-sycamore-700">out of 5.00</div>
+            </div>
+          </div>
+          <div v-if="myAppraisal.nine_box_position" class="mt-3 text-xs text-slate-500">
+            9-Box: <span class="font-medium text-slate-700">{{ myAppraisal.nine_box_position }}</span>
+          </div>
+          <p v-if="myAppraisal.notes" class="mt-3 text-sm text-slate-600 whitespace-pre-line border-t border-slate-100 pt-3">{{ myAppraisal.notes }}</p>
+        </article>
+
         <nav class="flex flex-wrap gap-1 border-b border-slate-200">
           <button
             v-for="t in [
@@ -609,6 +804,40 @@ function cycleObjectiveProgress(staffId: string) {
               Total weight {{ totalWeight.toFixed(0) }}%<span v-if="Math.abs(totalWeight - 100) > 0.01"> · should sum to 100% — ask your manager to rebalance</span>
             </div>
           </div>
+
+          <article v-if="availableTemplates.length" class="card p-5">
+            <header class="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 class="text-sm font-semibold text-slate-900">Cascading objectives</h3>
+                <p class="text-xs text-slate-500">Adopt company and department-level objectives into your cycle.</p>
+              </div>
+            </header>
+            <ul class="space-y-2">
+              <li
+                v-for="t in availableTemplates"
+                :key="t.id"
+                class="flex flex-wrap items-start justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50"
+              >
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-semibold text-sm text-slate-900">{{ t.title }}</span>
+                    <span class="badge" :class="t.scope === 'company' ? 'badge-blue' : 'badge-green'">{{ t.scope }}</span>
+                    <span class="badge badge-slate text-[10px] uppercase">{{ t.kind }}</span>
+                    <span class="badge badge-slate">Weight {{ Number(t.default_weight).toFixed(0) }}%</span>
+                  </div>
+                  <p v-if="t.description" class="text-xs text-slate-600 mt-1">{{ t.description }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="btn-secondary text-xs"
+                  :disabled="adoptingTemplateId === t.id"
+                  @click="adoptTemplate(t)"
+                >
+                  {{ adoptingTemplateId === t.id ? 'Adopting...' : 'Adopt' }}
+                </button>
+              </li>
+            </ul>
+          </article>
 
           <div v-if="!objectives.length" class="card p-8 text-center text-sm text-slate-500">
             No objectives assigned to you in this cycle yet.

@@ -111,3 +111,29 @@ export function useNotifications() {
     dismiss
   }
 }
+
+export async function emailUserNotification(args: {
+  user_id: string
+  title: string
+  body_html?: string
+  link_path?: string
+  link_label?: string
+  trigger?: string
+}) {
+  try {
+    const config = useRuntimeConfig()
+    const supabaseUrl = config.public.supabaseUrl as string
+    const anonKey = config.public.supabaseAnonKey as string
+    if (!supabaseUrl || !anonKey) return
+    await fetch(`${supabaseUrl}/functions/v1/email/notify_user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anonKey}`
+      },
+      body: JSON.stringify(args)
+    })
+  } catch {
+    /* fire and forget */
+  }
+}

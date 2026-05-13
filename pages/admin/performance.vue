@@ -38,7 +38,7 @@ const {
   loadPips, savePip, deletePip, loadPipCheckins, saveCheckin, deleteCheckin
 } = usePerformance()
 
-const tab = ref<'dashboard' | 'cycles' | 'frameworks' | 'objectives' | 'reviews' | 'recognitions' | 'pips'>('dashboard')
+const tab = ref<'dashboard' | 'cycles' | 'frameworks' | 'objectives' | 'appraisals' | 'calibration' | 'templates' | 'values' | 'reviews' | 'recognitions' | 'pips'>('dashboard')
 const loading = ref(true)
 
 const cycles = ref<PerformanceCycle[]>([])
@@ -617,6 +617,10 @@ const ratingDistribution = computed(() => {
       <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'cycles' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'cycles'">Cycles</button>
       <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'frameworks' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'frameworks'">Frameworks</button>
       <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'objectives' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'objectives'">Objectives</button>
+      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'appraisals' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'appraisals'">Appraisals</button>
+      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'calibration' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'calibration'">Calibration</button>
+      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'templates' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'templates'">Templates</button>
+      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'values' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'values'">Core values</button>
       <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'reviews' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'reviews'">Reviews</button>
       <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'recognitions' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'recognitions'">Recognition</button>
       <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'pips' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'pips'">Improvement plans</button>
@@ -858,6 +862,50 @@ const ratingDistribution = computed(() => {
           </ul>
         </article>
       </div>
+    </section>
+
+    <!-- Appraisals ------------------------------------------------------- -->
+    <section v-if="tab === 'appraisals' && !loading" class="space-y-4">
+      <div class="card p-4 sm:p-5">
+        <div class="grid md:grid-cols-2 gap-3">
+          <label class="block">
+            <span class="text-xs font-medium text-slate-600 mb-1 block">Cycle</span>
+            <select v-model="selectedCycleId" class="input">
+              <option value="" disabled>Select a cycle</option>
+              <option v-for="c in cycles" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <AppraisalsAdminTable
+        :cycles="cycles"
+        :staff-members="staffMembers"
+        :selected-cycle-id="selectedCycleId"
+      />
+    </section>
+
+    <!-- Calibration ------------------------------------------------------ -->
+    <section v-if="tab === 'calibration' && !loading" class="space-y-4">
+      <div class="card p-4 sm:p-5">
+        <label class="block max-w-sm">
+          <span class="text-xs font-medium text-slate-600 mb-1 block">Cycle</span>
+          <select v-model="selectedCycleId" class="input">
+            <option value="" disabled>Select a cycle</option>
+            <option v-for="c in cycles" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+        </label>
+      </div>
+      <CalibrationGrid :cycle-id="selectedCycleId" />
+    </section>
+
+    <!-- Templates -------------------------------------------------------- -->
+    <section v-if="tab === 'templates' && !loading" class="space-y-4">
+      <ObjectiveTemplatesEditor :cycles="cycles" :frameworks="frameworks" />
+    </section>
+
+    <!-- Core values ------------------------------------------------------ -->
+    <section v-if="tab === 'values' && !loading" class="space-y-4">
+      <CoreValuesEditor />
     </section>
 
     <!-- Reviews ---------------------------------------------------------- -->

@@ -175,6 +175,65 @@ export interface PerformanceImprovementPlan {
   updated_at: string
 }
 
+export type AppraisalStatus = 'not_started' | 'in_progress' | 'submitted' | 'finalized' | 'reopened'
+export const APPRAISAL_STATUSES: AppraisalStatus[] = ['not_started', 'in_progress', 'submitted', 'finalized', 'reopened']
+export const APPRAISAL_STATUS_LABELS: Record<AppraisalStatus, string> = {
+  not_started: 'Not started',
+  in_progress: 'In progress',
+  submitted: 'Submitted',
+  finalized: 'Finalized',
+  reopened: 'Reopened'
+}
+
+export interface PerformanceAppraisal {
+  id: string
+  cycle_id: string
+  subject_staff_id: string
+  appraiser_staff_id: string | null
+  status: AppraisalStatus
+  objective_score: number
+  behavioural_score: number
+  objective_weight: number
+  behavioural_weight: number
+  final_score: number
+  rating_label: string
+  rating_tag: string
+  nine_box_position: string
+  notes: string
+  submitted_at: string | null
+  finalized_at: string | null
+  finalized_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ObjectiveTemplateScope = 'company' | 'department'
+export interface PerformanceObjectiveTemplate {
+  id: string
+  cycle_id: string | null
+  scope: ObjectiveTemplateScope
+  department_id: string | null
+  framework_id: string | null
+  kind: FrameworkKind
+  category: PerformanceObjective['category']
+  title: string
+  description: string
+  default_weight: number
+  target_value: string
+  sort_order: number
+  is_active: boolean
+}
+
+export interface PerformanceCoreValue {
+  id: string
+  name: string
+  description: string
+  behaviour_anchors: string
+  weight: number
+  sort_order: number
+  is_active: boolean
+}
+
 export type PipCheckinStatus = 'on_track' | 'at_risk' | 'off_track'
 
 export interface PerformanceImprovementCheckin {
@@ -539,7 +598,161 @@ export function usePerformance() {
     if (error) throw error
   }
 
+  // Objective templates -------------------------------------------
+  async function loadObjectiveTemplates(opts: { cycleId?: string; scope?: ObjectiveTemplateScope; departmentId?: string } = {}) {
+    let q = supabase
+      .from('performance_objective_templates')
+      .select('*, department:departments(id, name), cycle:performance_cycles(id, name)')
+      .order('sort_order')
+      .order('created_at', { ascending: true })
+    if (opts.cycleId) q = q.eq('cycle_id', opts.cycleId)
+    if (opts.scope) q = q.eq('scope', opts.scope)
+    if (opts.departmentId) q = q.eq('department_id', opts.departmentId)
+    const { data } = await q
+    return data ?? []
+  }
+
+  async function saveObjectiveTemplate(payload: Partial<PerformanceObjectiveTemplate>): Promise<PerformanceObjectiveTemplate | null> {
+    const id = payload.id
+    if (id) {
+      const { data, error } = await supabase
+        .from('performance_objective_templates').update(payload).eq('id', id).select('*').maybeSingle()
+      if (error) throw error
+      return data as PerformanceObjectiveTemplate | null
+    }
+    const { data, error } = await supabase
+      .from('performance_objective_templates').insert(payload).select('*').maybeSingle()
+    if (error) throw error
+    return data as PerformanceObjectiveTemplate | null
+  }
+
+  async function deleteObjectiveTemplate(id: string) {
+    const { error } = await supabase.from('performance_objective_templates').delete().eq('id', id)
+    if (error) throw error
+  }
+
+  async function adoptObjectiveTemplate(templateId: string, staffId: string, cycleId: string): Promise<PerformanceObjective | null> {
+    const { data: t, error: e1 } = await supabase
+      .from('performance_objective_templates').select('*').eq('id', templateId).maybeSingle()
+    if (e1 || !t) throw (e1 ?? new Error('template missing'))
+    const tpl = t as PerformanceObjectiveTemplate
+    const { data, error } = await supabase
+      .from('performance_objectives')
+      .insert({
+        cycle_id: cycleId,
+        staff_id: staffId,
+        framework_id: tpl.framework_id,
+        kind: tpl.kind,
+        title: tpl.title,
+        description: tpl.description,
+        category: tpl.category,
+        weight: tpl.default_weight,
+        target_value: tpl.target_value,
+        status: 'active'
+      })
+      .select('*').maybeSingle()
+    if (error) throw error
+    return data as PerformanceObjective | null
+  }
+
+  // Core values ----------------------------------------------------
+  async function loadCoreValues(): Promise<PerformanceCoreValue[]> {
+    const { data } = await supabase
+      .from('performance_core_values').select('*').order('sort_order')
+    return (data as PerformanceCoreValue[]) ?? []
+  }
+
+  async function saveCoreValue(payload: Partial<PerformanceCoreValue>): Promise<PerformanceCoreValue | null> {
+    const id = payload.id
+    if (id) {
+      const { data, error } = await supabase
+        .from('performance_core_values').update(payload).eq('id', id).select('*').maybeSingle()
+      if (error) throw error
+      return data as PerformanceCoreValue | null
+    }
+    const { data, error } = await supabase
+      .from('performance_core_values').insert(payload).select('*').maybeSingle()
+    if (error) throw error
+    return data as PerformanceCoreValue | null
+  }
+
+  async function deleteCoreValue(id: string) {
+    const { error } = await supabase.from('performance_core_values').delete().eq('id', id)
+    if (error) throw error
+  }
+
+  // Appraisals ----------------------------------------------------
+  async function loadAppraisals(opts: { cycleId?: string; subjectStaffId?: string; appraiserStaffId?: string; status?: AppraisalStatus } = {}) {
+    let q = supabase
+      .from('performance_appraisals')
+      .select('*, subject:staff_members!performance_appraisals_subject_staff_id_fkey(id, full_name, email, role, department_id, auth_user_id), appraiser:staff_members!performance_appraisals_appraiser_staff_id_fkey(id, full_name, email, role), cycle:performance_cycles(id, name, status)')
+      .order('updated_at', { ascending: false })
+    if (opts.cycleId) q = q.eq('cycle_id', opts.cycleId)
+    if (opts.subjectStaffId) q = q.eq('subject_staff_id', opts.subjectStaffId)
+    if (opts.appraiserStaffId) q = q.eq('appraiser_staff_id', opts.appraiserStaffId)
+    if (opts.status) q = q.eq('status', opts.status)
+    const { data } = await q
+    return data ?? []
+  }
+
+  async function loadAppraisalForSubject(cycleId: string, subjectStaffId: string) {
+    const { data } = await supabase
+      .from('performance_appraisals')
+      .select('*, appraiser:staff_members!performance_appraisals_appraiser_staff_id_fkey(id, full_name, email, role)')
+      .eq('cycle_id', cycleId)
+      .eq('subject_staff_id', subjectStaffId)
+      .maybeSingle()
+    return data
+  }
+
+  async function saveAppraisal(payload: Partial<PerformanceAppraisal>): Promise<PerformanceAppraisal | null> {
+    const id = payload.id
+    if (id) {
+      const { data, error } = await supabase
+        .from('performance_appraisals').update(payload).eq('id', id).select('*').maybeSingle()
+      if (error) throw error
+      return data as PerformanceAppraisal | null
+    }
+    const { data, error } = await supabase
+      .from('performance_appraisals').insert(payload).select('*').maybeSingle()
+    if (error) throw error
+    return data as PerformanceAppraisal | null
+  }
+
+  async function deleteAppraisal(id: string) {
+    const { error } = await supabase.from('performance_appraisals').delete().eq('id', id)
+    if (error) throw error
+  }
+
+  async function recomputeAppraisal(id: string): Promise<PerformanceAppraisal | null> {
+    const { data, error } = await supabase.rpc('compute_appraisal_score', { p_appraisal_id: id })
+    if (error) throw error
+    return (data as PerformanceAppraisal) ?? null
+  }
+
+  async function reassignAppraiser(appraisalId: string, newAppraiserStaffId: string | null): Promise<PerformanceAppraisal | null> {
+    const { data, error } = await supabase.rpc('admin_reassign_appraiser', {
+      p_appraisal_id: appraisalId,
+      p_new_appraiser_staff_id: newAppraiserStaffId
+    })
+    if (error) throw error
+    return (data as PerformanceAppraisal) ?? null
+  }
+
   return {
+    loadObjectiveTemplates,
+    saveObjectiveTemplate,
+    deleteObjectiveTemplate,
+    adoptObjectiveTemplate,
+    loadCoreValues,
+    saveCoreValue,
+    deleteCoreValue,
+    loadAppraisals,
+    loadAppraisalForSubject,
+    saveAppraisal,
+    deleteAppraisal,
+    recomputeAppraisal,
+    reassignAppraiser,
     loadReviews,
     loadReview,
     loadReviewRatings,

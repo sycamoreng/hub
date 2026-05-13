@@ -33,7 +33,8 @@ const standalone = computed<NavItem[]>(() => {
 const rewardsGroup = computed<NavGroup>(() => {
   const items: NavItem[] = [
     { to: '/recognition', label: 'Recognition', icon: 'star' },
-    { to: '/wordle', label: 'Daily Wordle', icon: 'sparkle' }
+    { to: '/wordle', label: 'Daily Wordle', icon: 'sparkle' },
+    { to: '/typing', label: 'Typing Sprint', icon: 'sparkle' }
   ]
   if (raffleVisible.value) {
     items.push({ to: '/raffle', label: "Workers' Day Raffle", icon: 'gift' })
@@ -101,7 +102,8 @@ const baseGroups = computed<NavGroup[]>(() => [
     items: [
       { to: '/communication', label: 'Communication', icon: 'chat' },
       { to: '/contacts', label: 'Key Contacts', icon: 'phone' },
-      { to: '/calendar', label: 'Calendar', icon: 'calendar' }
+      { to: '/calendar', label: 'Calendar', icon: 'calendar' },
+      { to: '/appointments', label: 'Appointments', icon: 'calendar' }
     ]
   }
 ])

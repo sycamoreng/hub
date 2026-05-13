@@ -7,7 +7,70 @@ const supabase = useSupabase()
 const toast = useToast()
 const { canManageSection } = useAuth()
 
-const tab = ref<'sparks' | 'weights' | 'badges' | 'values' | 'wordle'>('sparks')
+const tab = ref<'sparks' | 'weights' | 'badges' | 'values' | 'wordle' | 'typing'>('sparks')
+
+const typingCategories = ref<any[]>([])
+const typingPrompts = ref<any[]>([])
+const typingNew = ref<{ category_id: string; text: string; length_tier: 'short' | 'medium' | 'long' }>({ category_id: '', text: '', length_tier: 'medium' })
+const typingNewCategory = ref<{ slug: string; name: string; description: string }>({ slug: '', name: '', description: '' })
+const typingFilterCategory = ref<string>('')
+
+async function loadTyping() {
+  const [{ data: cats }, { data: ps }] = await Promise.all([
+    supabase.from('typing_categories').select('*').order('sort_order'),
+    supabase.from('typing_prompts').select('*, category:typing_categories(id, name)').order('created_at', { ascending: false })
+  ])
+  typingCategories.value = cats ?? []
+  typingPrompts.value = ps ?? []
+  if (!typingNew.value.category_id && typingCategories.value.length) typingNew.value.category_id = typingCategories.value[0].id
+}
+
+async function addTypingCategory() {
+  const c = typingNewCategory.value
+  if (!c.slug.trim() || !c.name.trim()) { toast.error('Slug and name required'); return }
+  const { error } = await supabase.from('typing_categories').insert({ slug: c.slug.trim().toLowerCase(), name: c.name.trim(), description: c.description, sort_order: typingCategories.value.length })
+  if (error) { toast.error(error.message); return }
+  typingNewCategory.value = { slug: '', name: '', description: '' }
+  await loadTyping()
+  toast.success('Category added')
+}
+
+async function toggleTypingCategory(cat: any) {
+  await supabase.from('typing_categories').update({ is_active: !cat.is_active }).eq('id', cat.id)
+  await loadTyping()
+}
+
+async function deleteTypingCategory(cat: any) {
+  if (!confirm(`Delete category "${cat.name}" and all its prompts?`)) return
+  await supabase.from('typing_categories').delete().eq('id', cat.id)
+  await loadTyping()
+}
+
+async function addTypingPrompt() {
+  const p = typingNew.value
+  if (!p.text.trim() || !p.category_id) { toast.error('Pick category and prompt text'); return }
+  const { error } = await supabase.from('typing_prompts').insert({ category_id: p.category_id, text: p.text.trim(), length_tier: p.length_tier })
+  if (error) { toast.error(error.message); return }
+  typingNew.value.text = ''
+  await loadTyping()
+  toast.success('Prompt added')
+}
+
+async function toggleTypingPrompt(p: any) {
+  await supabase.from('typing_prompts').update({ is_active: !p.is_active }).eq('id', p.id)
+  await loadTyping()
+}
+
+async function deleteTypingPrompt(p: any) {
+  if (!confirm('Delete this prompt?')) return
+  await supabase.from('typing_prompts').delete().eq('id', p.id)
+  await loadTyping()
+}
+
+const filteredTypingPrompts = computed(() => {
+  if (!typingFilterCategory.value) return typingPrompts.value
+  return typingPrompts.value.filter(p => p.category_id === typingFilterCategory.value)
+})
 
 const sparks = ref<any[]>([])
 const weights = ref<any[]>([])
@@ -39,7 +102,7 @@ async function loadAll() {
     loading.value = false
   }
 }
-onMounted(loadAll)
+onMounted(async () => { await loadAll(); await loadTyping() })
 
 // Spark editor
 const sparkForm = ref({
@@ -214,7 +277,7 @@ const canManage = computed(() => canManageSection('gamification'))
 
     <div v-else>
       <div class="inline-flex p-0.5 bg-slate-800 rounded-lg text-xs font-medium mb-6">
-        <button v-for="t in (['sparks','wordle','weights','badges','values'] as const)" :key="t" type="button" @click="tab = t" :class="tab === t ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-md capitalize">
+        <button v-for="t in (['sparks','wordle','typing','weights','badges','values'] as const)" :key="t" type="button" @click="tab = t" :class="tab === t ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-md capitalize">
           {{ t }}
         </button>
       </div>
@@ -376,6 +439,65 @@ const canManage = computed(() => canManageSection('gamification'))
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section v-if="tab === 'typing'" class="space-y-6">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-5">
+          <h2 class="text-sm font-semibold text-white mb-1">Categories</h2>
+          <p class="text-xs text-slate-400 mb-4">Buckets for prompts. Staff can filter by category in the Typing Sprint game.</p>
+          <div class="grid sm:grid-cols-4 gap-2 mb-4">
+            <input v-model="typingNewCategory.slug" placeholder="slug" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+            <input v-model="typingNewCategory.name" placeholder="name" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+            <input v-model="typingNewCategory.description" placeholder="description" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+            <button type="button" @click="addTypingCategory" class="px-4 py-2 text-sm font-semibold bg-sycamore-600 hover:bg-sycamore-500 text-white rounded-lg">Add category</button>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <div v-for="c in typingCategories" :key="c.id" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs border" :class="c.is_active ? 'bg-slate-900 border-slate-600 text-slate-100' : 'bg-slate-900/40 border-slate-800 text-slate-500'">
+              <span>{{ c.name }} <span class="text-slate-500">/{{ c.slug }}</span></span>
+              <button type="button" @click="toggleTypingCategory(c)" class="text-amber-400 hover:text-amber-300">{{ c.is_active ? 'hide' : 'show' }}</button>
+              <button type="button" @click="deleteTypingCategory(c)" class="text-rose-400 hover:text-rose-300">&times;</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-5">
+          <h2 class="text-sm font-semibold text-white mb-1">Prompts</h2>
+          <p class="text-xs text-slate-400 mb-4">Phrases or sentences staff will type. Mark prompts with the right length tier so timed/sprint modes pick appropriate text.</p>
+          <div class="grid sm:grid-cols-12 gap-2 mb-4">
+            <select v-model="typingNew.category_id" class="sm:col-span-3 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white">
+              <option v-for="c in typingCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+            <select v-model="typingNew.length_tier" class="sm:col-span-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white">
+              <option value="short">Short</option>
+              <option value="medium">Medium</option>
+              <option value="long">Long</option>
+            </select>
+            <input v-model="typingNew.text" placeholder="Type the prompt text..." class="sm:col-span-5 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+            <button type="button" @click="addTypingPrompt" class="sm:col-span-2 px-4 py-2 text-sm font-semibold bg-sycamore-600 hover:bg-sycamore-500 text-white rounded-lg">Add prompt</button>
+          </div>
+
+          <div class="mb-3 flex items-center gap-2">
+            <span class="text-xs uppercase tracking-wide text-slate-400">Filter</span>
+            <select v-model="typingFilterCategory" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
+              <option value="">All categories</option>
+              <option v-for="c in typingCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+            <span class="text-xs text-slate-500">{{ filteredTypingPrompts.length }} prompts</span>
+          </div>
+
+          <ul class="divide-y divide-slate-700">
+            <li v-for="p in filteredTypingPrompts" :key="p.id" class="py-2 flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="text-[11px] uppercase tracking-wide text-slate-500">{{ p.category?.name ?? '—' }} · {{ p.length_tier }}</div>
+                <div class="text-sm text-slate-100" :class="!p.is_active ? 'opacity-50 line-through' : ''">{{ p.text }}</div>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                <button type="button" @click="toggleTypingPrompt(p)" class="text-xs text-amber-400 hover:text-amber-300">{{ p.is_active ? 'hide' : 'show' }}</button>
+                <button type="button" @click="deleteTypingPrompt(p)" class="text-xs text-rose-400 hover:text-rose-300">delete</button>
+              </div>
+            </li>
+          </ul>
         </div>
       </section>
 

@@ -2,6 +2,7 @@
 definePageMeta({ layout: 'admin', middleware: ['auth'] })
 import { useSupabase } from '~/utils/supabase'
 import { useLeave, type LeaveType, type PublicHoliday } from '~/composables/useLeave'
+import { emailUserNotification } from '~/composables/useNotifications'
 
 const supabase = useSupabase()
 const toast = useToast()
@@ -16,6 +17,15 @@ const requestFilter = ref<'pending' | 'approved' | 'declined' | 'cancelled' | 'a
 const selected = ref<any | null>(null)
 const decision = ref({ status: 'approved' as 'approved' | 'declined', notes: '' })
 const savingDecision = ref(false)
+
+const payoutModal = ref<{ row: any; status: 'approved' | 'rejected' } | null>(null)
+const payoutNotes = ref('')
+const savingPayout = ref(false)
+
+function formatNGN(n: number): string {
+  if (!n) return '—'
+  return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(n)
+}
 
 const types = ref<LeaveType[]>([])
 const holidays = ref<PublicHoliday[]>([])
@@ -136,6 +146,14 @@ async function applyDecision() {
         body: decision.value.notes.trim() || `${req.working_days} day(s) of ${req.leave_type?.name ?? 'leave'}`,
         link: '/leave'
       })
+      void emailUserNotification({
+        user_id: req.requester_user_id,
+        title: `Your leave request was ${next}`,
+        body_html: `<p>${decision.value.notes.trim() || `${req.working_days} day(s) of ${req.leave_type?.name ?? 'leave'}`}</p>`,
+        link_path: '/leave',
+        link_label: 'View leave',
+        trigger: 'leave_decision'
+      })
     } catch { /* non-fatal */ }
 
     toast.success('Decision saved')
@@ -247,6 +265,59 @@ async function saveBalance() {
 }
 
 const canManage = computed(() => canPerform('attendance', 'update'))
+const canPayout = computed(() => canPerform('payroll', 'update') || canPerform('payroll', 'manage'))
+
+function openPayout(row: any, status: 'approved' | 'rejected') {
+  payoutModal.value = { row, status }
+  payoutNotes.value = ''
+}
+
+async function submitPayout() {
+  if (!payoutModal.value || !user.value) return
+  savingPayout.value = true
+  try {
+    const { row, status } = payoutModal.value
+    const { error } = await supabase.from('leave_requests').update({
+      finance_status: status,
+      finance_reviewer_id: user.value.id,
+      finance_decided_at: new Date().toISOString(),
+      finance_notes: payoutNotes.value.trim(),
+      updated_at: new Date().toISOString()
+    }).eq('id', row.id)
+    if (error) throw error
+    try {
+      await supabase.from('notifications').insert({
+        recipient_id: row.requester_user_id,
+        actor_id: user.value.id,
+        type: 'leave_allowance',
+        title: status === 'approved' ? 'Leave allowance paid' : 'Leave allowance declined',
+        body: payoutNotes.value.trim() || (row.allowance_amount ? `Amount: ${formatNGN(Number(row.allowance_amount))}` : ''),
+        link: '/leave'
+      })
+      void emailUserNotification({
+        user_id: row.requester_user_id,
+        title: status === 'approved' ? 'Leave allowance paid' : 'Leave allowance declined',
+        body_html: `<p>${payoutNotes.value.trim() || (row.allowance_amount ? `Amount: ${formatNGN(Number(row.allowance_amount))}` : '')}</p>`,
+        link_path: '/leave',
+        link_label: 'View leave',
+        trigger: 'leave_allowance'
+      })
+    } catch { /* non-fatal */ }
+    toast.success('Saved')
+    payoutModal.value = null
+    await loadRequests()
+  } catch (e: any) {
+    toast.error(e.message ?? 'Failed')
+  } finally {
+    savingPayout.value = false
+  }
+}
+
+function payoutBadge(s: string): string {
+  if (s === 'approved') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  if (s === 'rejected') return 'bg-rose-50 text-rose-700 border-rose-200'
+  return 'bg-amber-50 text-amber-700 border-amber-200'
+}
 </script>
 
 <template>
@@ -326,6 +397,16 @@ const canManage = computed(() => canPerform('attendance', 'update'))
               <template v-if="r.status === 'pending'">
                 <button type="button" @click="openDecide(r, 'approved')" class="text-xs font-semibold px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700">Approve</button>
                 <button type="button" @click="openDecide(r, 'declined')" class="text-xs font-semibold px-2.5 py-1 rounded bg-rose-600 text-white hover:bg-rose-700">Decline</button>
+              </template>
+              <template v-else-if="r.status === 'approved' && Number(r.allowance_amount) > 0">
+                <div class="flex flex-col items-end gap-1">
+                  <span class="text-xs text-slate-600 tabular-nums">{{ formatNGN(Number(r.allowance_amount)) }}</span>
+                  <span class="text-[10px] font-semibold px-2 py-0.5 rounded border capitalize" :class="payoutBadge(r.finance_status)">Finance: {{ r.finance_status || 'pending' }}</span>
+                  <div v-if="canPayout && (!r.finance_status || r.finance_status === 'pending')" class="flex gap-1">
+                    <button type="button" @click="openPayout(r, 'approved')" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-600 text-white hover:bg-emerald-700">Mark paid</button>
+                    <button type="button" @click="openPayout(r, 'rejected')" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-rose-600 text-white hover:bg-rose-700">Reject</button>
+                  </div>
+                </div>
               </template>
               <span v-else-if="r.decision_notes" class="text-xs text-slate-500" :title="r.decision_notes">Note</span>
             </td>
@@ -470,6 +551,30 @@ const canManage = computed(() => canPerform('attendance', 'update'))
             class="text-sm font-semibold px-4 py-2 rounded-lg text-white"
             :class="decision.status === 'approved' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'">
             {{ savingDecision ? 'Saving...' : (decision.status === 'approved' ? 'Approve' : 'Decline') }}
+          </button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Payout modal -->
+    <div v-if="payoutModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40" @click.self="payoutModal = null">
+      <div class="bg-white rounded-2xl max-w-md w-full shadow-xl">
+        <header class="px-6 py-4 border-b border-slate-200">
+          <h3 class="text-base font-semibold text-slate-900">{{ payoutModal.status === 'approved' ? 'Mark allowance paid' : 'Reject allowance' }}</h3>
+          <p class="text-xs text-slate-500 mt-1">{{ payoutModal.row.staff?.full_name }} &middot; {{ formatNGN(Number(payoutModal.row.allowance_amount)) }}</p>
+        </header>
+        <div class="p-6">
+          <label class="block">
+            <span class="text-xs font-medium text-slate-600">Note (optional)</span>
+            <textarea v-model="payoutNotes" rows="4" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Payment reference, date, or reason"></textarea>
+          </label>
+        </div>
+        <footer class="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
+          <button type="button" @click="payoutModal = null" class="text-sm px-3 py-2 rounded-lg hover:bg-slate-100">Cancel</button>
+          <button type="button" @click="submitPayout" :disabled="savingPayout"
+            class="text-sm font-semibold px-4 py-2 rounded-lg text-white"
+            :class="payoutModal.status === 'approved' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'">
+            {{ savingPayout ? 'Saving...' : (payoutModal.status === 'approved' ? 'Confirm payment' : 'Reject') }}
           </button>
         </footer>
       </div>

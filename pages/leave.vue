@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useSupabase } from '~/utils/supabase'
 import { useLeave, computeWorkingDays, ymd, type LeaveType, type PublicHoliday } from '~/composables/useLeave'
+import { emailUserNotification } from '~/composables/useNotifications'
 
 const supabase = useSupabase()
 const { user } = useAuth()
@@ -9,6 +10,7 @@ const { loadLeaveTypes, loadPublicHolidays, loadStaffBalances, ensureBalanceRows
 
 const staffId = ref<string | null>(null)
 const staffName = ref<string>('')
+const monthlyNetSalary = ref<number>(0)
 const leaveTypes = ref<LeaveType[]>([])
 const holidays = ref<PublicHoliday[]>([])
 const balances = ref<any[]>([])
@@ -37,18 +39,39 @@ const computedDays = computed(() => {
   return computeWorkingDays(form.value.start_date, form.value.end_date, holidays.value, form.value.half_day_start, form.value.half_day_end)
 })
 
+const selectedLeaveType = computed(() => leaveTypes.value.find(t => t.id === form.value.leave_type_id) ?? null)
+const isAnnualLeave = computed(() => {
+  const code = (selectedLeaveType.value?.code || '').toLowerCase()
+  const name = (selectedLeaveType.value?.name || '').toLowerCase()
+  return code === 'annual' || name.includes('annual')
+})
+
+const allowanceAmount = computed(() => {
+  if (!isAnnualLeave.value) return 0
+  if (!monthlyNetSalary.value) return 0
+  if (!computedDays.value) return 0
+  // Working days per month assumed at 22; allowance scaled by days taken.
+  return Math.round((monthlyNetSalary.value / 22) * computedDays.value * 100) / 100
+})
+
+function formatNGN(n: number): string {
+  if (!n) return '—'
+  return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(n)
+}
+
 async function load() {
   loading.value = true
   try {
     if (!user.value) return
     const { data: staff } = await supabase
       .from('staff_members')
-      .select('id, full_name')
+      .select('id, full_name, monthly_net_salary')
       .eq('auth_user_id', user.value.id)
       .maybeSingle()
     if (!staff) { loading.value = false; return }
     staffId.value = (staff as any).id
     staffName.value = (staff as any).full_name
+    monthlyNetSalary.value = Number((staff as any).monthly_net_salary ?? 0)
     const [lt, ph] = await Promise.all([loadLeaveTypes(), loadPublicHolidays()])
     leaveTypes.value = lt
     holidays.value = ph
@@ -111,7 +134,9 @@ async function submit() {
       notify_colleagues: form.value.notify_colleagues,
       relief_officer_id: form.value.relief_officer_id || null,
       handover_notes: form.value.handover_notes.trim(),
-      status: 'pending'
+      status: 'pending',
+      monthly_net_salary: monthlyNetSalary.value,
+      allowance_amount: allowanceAmount.value
     }
     const { data: inserted, error } = await supabase
       .from('leave_requests')
@@ -142,6 +167,14 @@ async function submit() {
             body: `${days} day(s) of leave from ${form.value.start_date} to ${form.value.end_date}`,
             link: '/admin/leave'
           })
+          void emailUserNotification({
+            user_id: (mgr as any).auth_user_id,
+            title: `Leave request from ${staffName.value}`,
+            body_html: `<p>${staffName.value} requested ${days} day(s) of leave from <strong>${form.value.start_date}</strong> to <strong>${form.value.end_date}</strong>.</p>`,
+            link_path: '/admin/leave',
+            link_label: 'Review request',
+            trigger: 'leave_request'
+          })
         }
       }
     } catch { /* non-fatal */ }
@@ -161,6 +194,14 @@ async function submit() {
             title: `${staffName.value} nominated you as relief officer`,
             body: `${payload.start_date} - ${payload.end_date} (${days} day(s))`,
             link: '/leave'
+          })
+          void emailUserNotification({
+            user_id: (relief as any).auth_user_id,
+            title: `${staffName.value} nominated you as relief officer`,
+            body_html: `<p>You've been asked to provide cover from <strong>${payload.start_date}</strong> to <strong>${payload.end_date}</strong> (${days} day(s)).</p>`,
+            link_path: '/leave',
+            link_label: 'Respond on leave page',
+            trigger: 'leave_relief_request'
           })
         }
       } catch { /* non-fatal */ }
@@ -230,6 +271,14 @@ async function submitReliefResponse() {
         title: `${staffName.value} ${action === 'accept' ? 'accepted' : 'declined'} relief cover`,
         body: reliefNotes.value.trim() || `${row.start_date} - ${row.end_date}`,
         link: '/leave'
+      })
+      void emailUserNotification({
+        user_id: row.requester_user_id,
+        title: `${staffName.value} ${action === 'accept' ? 'accepted' : 'declined'} relief cover`,
+        body_html: `<p>${reliefNotes.value.trim() || `Dates: ${row.start_date} - ${row.end_date}`}</p>`,
+        link_path: '/leave',
+        link_label: 'Open my leave',
+        trigger: 'leave_relief_response'
       })
     } catch { /* non-fatal */ }
     toast.success('Response recorded')
@@ -356,6 +405,14 @@ const upcomingHolidays = computed(() => {
             <input v-model="form.notify_colleagues" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-sycamore-600" />
             Notify my team when approved
           </label>
+          <div v-if="isAnnualLeave" class="sm:col-span-2 rounded-lg border border-leaf-200 bg-leaf-50 p-3 text-sm text-leaf-900">
+            <div class="font-semibold">Leave allowance preview</div>
+            <p v-if="!monthlyNetSalary" class="text-xs mt-1">Your monthly net salary isn't set yet, so an allowance can't be calculated. Ask HC to update your salary record.</p>
+            <p v-else class="text-xs mt-1">
+              Estimated allowance: <span class="font-semibold tabular-nums">{{ formatNGN(allowanceAmount) }}</span>
+              <span class="text-leaf-800/70"> &middot; based on {{ formatNGN(monthlyNetSalary) }} / 22 working days × {{ computedDays }} day(s). Final amount is confirmed by Finance after HC approval.</span>
+            </p>
+          </div>
           <div class="sm:col-span-2 flex items-center justify-between pt-2 border-t border-slate-100">
             <div class="text-sm text-slate-600">
               <span class="font-semibold text-slate-900 tabular-nums">{{ computedDays }}</span> working day(s) &middot; weekends &amp; holidays excluded

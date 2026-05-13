@@ -20,10 +20,55 @@ const form = ref({
   reason: '',
   effective_date: today,
   last_working_day: '',
-  notes: ''
+  notes: '',
+  resignation_letter_url: '',
+  handover_notes_url: '',
+  handover_summary: ''
 })
+const uploadingLetter = ref(false)
+const uploadingHandover = ref(false)
 const saving = ref(false)
 const showForm = ref(false)
+
+async function uploadDoc(kind: 'letter' | 'handover', file: File) {
+  if (!user.value) return null
+  const path = `${user.value.id}/${kind}-${Date.now()}-${file.name}`
+  const { error } = await supabase.storage.from('exit-documents').upload(path, file, {
+    cacheControl: '3600',
+    upsert: false
+  })
+  if (error) {
+    toast.error(error.message)
+    return null
+  }
+  return path
+}
+
+async function onUploadLetter(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0]
+  if (!f) return
+  uploadingLetter.value = true
+  try {
+    const path = await uploadDoc('letter', f)
+    if (path) {
+      form.value.resignation_letter_url = path
+      toast.success('Resignation letter uploaded')
+    }
+  } finally { uploadingLetter.value = false }
+}
+
+async function onUploadHandover(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0]
+  if (!f) return
+  uploadingHandover.value = true
+  try {
+    const path = await uploadDoc('handover', f)
+    if (path) {
+      form.value.handover_notes_url = path
+      toast.success('Handover note uploaded')
+    }
+  } finally { uploadingHandover.value = false }
+}
 
 async function loadMine() {
   loading.value = true
@@ -61,6 +106,10 @@ async function submitResignation() {
     toast.error('Please share a brief reason.')
     return
   }
+  if (!form.value.resignation_letter_url) {
+    toast.error('Please attach your resignation letter.')
+    return
+  }
   saving.value = true
   try {
     const created = await createCase({
@@ -72,13 +121,16 @@ async function submitResignation() {
       notes: form.value.notes.trim(),
       status: 'initiated',
       initiated_by_user_id: user.value.id,
-      initiated_by_kind: 'self'
-    })
+      initiated_by_kind: 'self',
+      resignation_letter_url: form.value.resignation_letter_url,
+      handover_notes_url: form.value.handover_notes_url,
+      handover_summary: form.value.handover_summary.trim()
+    } as any)
     if (created) {
       await notifyHods(created, staffName.value)
       toast.success('Resignation submitted. HoDs have been notified.')
       showForm.value = false
-      form.value = { reason: '', effective_date: today, last_working_day: '', notes: '' }
+      form.value = { reason: '', effective_date: today, last_working_day: '', notes: '', resignation_letter_url: '', handover_notes_url: '', handover_summary: '' }
       await loadMine()
     }
   } catch (e: any) {
@@ -165,6 +217,22 @@ function statusChip(s: string) {
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">Proposed last working day</label>
           <input v-model="form.last_working_day" type="date" class="input" />
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Resignation letter <span class="text-rose-600">*</span></label>
+          <input type="file" accept=".pdf,.doc,.docx,image/*" @change="onUploadLetter" class="input" :disabled="uploadingLetter" />
+          <p v-if="form.resignation_letter_url" class="text-xs text-emerald-700 mt-1">Uploaded.</p>
+          <p v-else-if="uploadingLetter" class="text-xs text-slate-500 mt-1">Uploading...</p>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Handover note (optional file)</label>
+          <input type="file" accept=".pdf,.doc,.docx,image/*" @change="onUploadHandover" class="input" :disabled="uploadingHandover" />
+          <p v-if="form.handover_notes_url" class="text-xs text-emerald-700 mt-1">Uploaded.</p>
+          <p v-else-if="uploadingHandover" class="text-xs text-slate-500 mt-1">Uploading...</p>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Handover summary (optional)</label>
+          <textarea v-model="form.handover_summary" rows="3" class="input" placeholder="Outstanding tasks, contacts, where files live, recurring meetings..." />
         </div>
         <div class="md:col-span-2">
           <label class="block text-xs font-semibold text-slate-600 mb-1">Additional notes (optional)</label>
