@@ -119,9 +119,45 @@ function effectiveAction(email: string): 'include'|'exclude' {
 }
 
 const existingEmails = ref<Set<string>>(new Set())
+const staffRecords = ref<Array<{ id: string; full_name: string; email: string; is_active: boolean }>>([])
 async function loadExistingStaffEmails() {
-  const { data } = await supabase.from('staff_members').select('email')
+  const { data } = await supabase.from('staff_members').select('id, full_name, email, is_active')
+  staffRecords.value = (data ?? []) as any
   existingEmails.value = new Set((data ?? []).map((r: any) => (r.email ?? '').toLowerCase()))
+}
+
+const googleEmails = computed(() => new Set(googleUsers.value.map(u => u.email.toLowerCase())))
+
+const missingFromGoogle = computed(() => {
+  if (!googleUsers.value.length) return []
+  return staffRecords.value
+    .filter(s => s.email && s.is_active !== false)
+    .filter(s => !googleEmails.value.has(s.email.toLowerCase()))
+    .filter(s => effectiveAction(s.email) !== 'exclude')
+})
+
+async function excludeFromDirectory(staff: { id: string; email: string; full_name: string }) {
+  const ok = await toast.confirm({
+    title: `Exclude ${staff.full_name || staff.email}?`,
+    message: 'This will mark them inactive in the staff directory and add an exclude rule so future syncs skip them.',
+    variant: 'danger',
+    confirmLabel: 'Exclude'
+  })
+  if (!ok) return
+  try {
+    const em = staff.email.toLowerCase()
+    const [{ error: ruleErr }, { error: staffErr }] = await Promise.all([
+      supabase.from('google_sync_rules').upsert({ email: em, action: 'exclude' }, { onConflict: 'email' }),
+      supabase.from('staff_members').update({ is_active: false }).eq('id', staff.id)
+    ])
+    if (ruleErr) throw ruleErr
+    if (staffErr) throw staffErr
+    rules.value = new Map(rules.value.set(em, { email: em, action: 'exclude', note: rules.value.get(em)?.note ?? '' }))
+    staffRecords.value = staffRecords.value.map(s => s.id === staff.id ? { ...s, is_active: false } : s)
+    toast.success(`${staff.full_name || staff.email} excluded`)
+  } catch (e: any) {
+    toast.error(e.message)
+  }
 }
 
 const filteredUsers = computed(() => {
@@ -345,6 +381,31 @@ onMounted(async () => {
           <span class="px-2 text-xs text-slate-600">Page {{ runsPage }} of {{ runsTotalPages }}</span>
           <button class="px-2 py-1 rounded border border-slate-200 text-xs disabled:opacity-40" :disabled="runsPage >= runsTotalPages" @click="runsPage += 1">Next</button>
         </div>
+      </div>
+
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-900">Missing from Google Workspace</h2>
+            <p class="text-xs text-slate-500">Active staff whose email no longer appears in Workspace. Consider excluding them from the directory.</p>
+          </div>
+          <div class="text-xs text-slate-500">{{ missingFromGoogle.length }} flagged</div>
+        </div>
+        <div v-if="loadingUsers" class="text-xs text-slate-400">Checking against Workspace...</div>
+        <div v-else-if="!googleUsers.length" class="text-xs text-slate-400">Fetch Google users on the Users tab first.</div>
+        <div v-else-if="!missingFromGoogle.length" class="text-xs text-emerald-600">Every active staff member is present in Google Workspace.</div>
+        <ul v-else class="divide-y divide-slate-100">
+          <li v-for="s in missingFromGoogle" :key="s.id" class="flex items-center justify-between gap-3 py-2">
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-slate-800 truncate">{{ s.full_name || s.email }}</div>
+              <div class="text-xs text-slate-500 truncate">{{ s.email }}</div>
+            </div>
+            <div class="flex gap-1 shrink-0">
+              <button class="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" @click="setRule(s.email, 'exclude')">Exclude rule only</button>
+              <button class="text-xs px-2 py-1 rounded border border-rose-200 text-rose-700 hover:bg-rose-50" @click="excludeFromDirectory(s)">Exclude from directory</button>
+            </div>
+          </li>
+        </ul>
       </div>
 
       <div v-if="lastDiff.length" class="card p-4">
