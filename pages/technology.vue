@@ -36,8 +36,16 @@ const filtered = computed(() => selected.value === 'All' ? stack.value : stack.v
     <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
       <article v-for="t in filtered" :key="t.id" class="card card-hover p-6">
         <div class="flex items-start justify-between mb-3">
-          <div class="w-11 h-11 rounded-lg bg-sycamore-50 text-sycamore-600 flex items-center justify-center">
-            <SidebarIcon name="palette" />
+          <div class="w-11 h-11 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+            <img
+              v-if="t.logo_url"
+              :src="t.logo_url"
+              :alt="t.name + ' logo'"
+              loading="lazy"
+              class="w-8 h-8 object-contain"
+              @error="($event.target as HTMLImageElement).style.display='none'"
+            />
+            <SidebarIcon v-else name="palette" />
           </div>
           <span class="badge badge-slate capitalize">{{ t.category }}</span>
         </div>

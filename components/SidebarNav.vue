@@ -87,6 +87,7 @@ const baseGroups = computed<NavGroup[]>(() => [
     items: [
       { to: '/policies', label: 'Policies', icon: 'book' },
       { to: '/benefits', label: 'Benefits & Perks', icon: 'gift' },
+      { to: '/hmo', label: 'My HMO', icon: 'gift' },
       { to: '/branding', label: 'Branding', icon: 'palette' },
       { to: '/payroll', label: 'My Payroll', icon: 'card' },
       { to: '/finance', label: 'Advance & Loans', icon: 'card' },

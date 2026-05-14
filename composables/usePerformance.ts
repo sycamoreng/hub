@@ -175,14 +175,15 @@ export interface PerformanceImprovementPlan {
   updated_at: string
 }
 
-export type AppraisalStatus = 'not_started' | 'in_progress' | 'submitted' | 'finalized' | 'reopened'
-export const APPRAISAL_STATUSES: AppraisalStatus[] = ['not_started', 'in_progress', 'submitted', 'finalized', 'reopened']
+export type AppraisalStatus = 'not_started' | 'in_progress' | 'submitted' | 'finalized' | 'reopened' | 'exempt'
+export const APPRAISAL_STATUSES: AppraisalStatus[] = ['not_started', 'in_progress', 'submitted', 'finalized', 'reopened', 'exempt']
 export const APPRAISAL_STATUS_LABELS: Record<AppraisalStatus, string> = {
   not_started: 'Not started',
   in_progress: 'In progress',
   submitted: 'Submitted',
   finalized: 'Finalized',
-  reopened: 'Reopened'
+  reopened: 'Reopened',
+  exempt: 'Exempt'
 }
 
 export interface PerformanceAppraisal {
@@ -739,6 +740,30 @@ export function usePerformance() {
     return (data as PerformanceAppraisal) ?? null
   }
 
+  async function resetAppraisal(appraisalId: string): Promise<PerformanceAppraisal | null> {
+    const { data, error } = await supabase.rpc('admin_reset_appraisal', { p_appraisal_id: appraisalId })
+    if (error) throw error
+    return (data as PerformanceAppraisal) ?? null
+  }
+
+  async function exemptAppraisal(appraisalId: string, reason: string): Promise<PerformanceAppraisal | null> {
+    const { data, error } = await supabase.rpc('admin_exempt_appraisal', {
+      p_appraisal_id: appraisalId,
+      p_reason: reason
+    })
+    if (error) throw error
+    return (data as PerformanceAppraisal) ?? null
+  }
+
+  async function bulkExemptAppraisals(ids: string[], reason: string): Promise<number> {
+    const { data, error } = await supabase.rpc('admin_bulk_exempt_appraisals', {
+      p_ids: ids,
+      p_reason: reason
+    })
+    if (error) throw error
+    return (data as number) ?? 0
+  }
+
   return {
     loadObjectiveTemplates,
     saveObjectiveTemplate,
@@ -753,6 +778,9 @@ export function usePerformance() {
     deleteAppraisal,
     recomputeAppraisal,
     reassignAppraiser,
+    resetAppraisal,
+    exemptAppraisal,
+    bulkExemptAppraisals,
     loadReviews,
     loadReview,
     loadReviewRatings,

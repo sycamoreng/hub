@@ -27,6 +27,7 @@ const fields = [
   { key: 'description', label: 'Description', type: 'textarea' },
   { key: 'used_for', label: 'Used for', placeholder: 'e.g. Backend services for payments' },
   { key: 'url', label: 'Reference URL', placeholder: 'https://...' },
+  { key: 'logo_url', label: 'Logo URL', placeholder: 'https://logo.clearbit.com/example.com' },
   { key: 'display_order', label: 'Display order', type: 'number' },
   { key: 'is_active', label: 'Active', type: 'checkbox' }
 ] as const
@@ -52,6 +53,7 @@ async function save(payload: Record<string, any>) {
       description: payload.description ?? '',
       used_for: payload.used_for ?? '',
       url: payload.url ?? '',
+      logo_url: payload.logo_url ?? '',
       display_order: Number(payload.display_order) || 0,
       is_active: payload.is_active === undefined ? true : !!payload.is_active
     }

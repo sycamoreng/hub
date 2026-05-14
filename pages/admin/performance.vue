@@ -44,9 +44,15 @@ const loading = ref(true)
 const cycles = ref<PerformanceCycle[]>([])
 const frameworks = ref<PerformanceFramework[]>([])
 const staffMembers = ref<any[]>([])
+const departments = ref<{ id: string; name: string }[]>([])
 const objectives = ref<any[]>([])
 const selectedCycleId = ref<string>('')
 const selectedStaffId = ref<string>('')
+const selectedDepartmentId = ref<string>('')
+const selectedPaygroup = ref<string>('')
+const showBulkUpload = ref(false)
+const bulkObjectivesText = ref('')
+const bulkUploading = ref(false)
 
 const editingCycle = ref<Partial<PerformanceCycle> | null>(null)
 const editingFramework = ref<Partial<PerformanceFramework> | null>(null)
@@ -68,14 +74,16 @@ const editingCheckin = ref<Partial<PerformanceImprovementCheckin> | null>(null)
 async function loadAll() {
   loading.value = true
   try {
-    const [c, f, { data: sm }] = await Promise.all([
+    const [c, f, { data: sm }, { data: dep }] = await Promise.all([
       loadCycles(),
       loadFrameworks(),
-      supabase.from('staff_members').select('id, full_name, email, role, department_id, is_active').eq('is_active', true).order('full_name')
+      supabase.from('staff_members').select('id, full_name, email, role, department_id, paygroup, is_active').eq('is_active', true).order('full_name'),
+      supabase.from('departments').select('id, name').order('name')
     ])
     cycles.value = c
     frameworks.value = f
     staffMembers.value = sm ?? []
+    departments.value = dep ?? []
     if (!selectedCycleId.value) {
       const primary = c.find(x => x.is_primary) ?? c[0]
       selectedCycleId.value = primary?.id ?? ''
@@ -104,13 +112,36 @@ async function reloadPips() {
 
 async function reloadObjectives() {
   if (!selectedCycleId.value) { objectives.value = []; return }
-  objectives.value = await loadObjectives({
+  const all = await loadObjectives({
     cycleId: selectedCycleId.value,
     staffId: selectedStaffId.value || undefined
   })
+  const staffIndex = new Map(staffMembers.value.map(s => [s.id, s]))
+  objectives.value = all.filter((o: any) => {
+    const s = staffIndex.get(o.staff_id)
+    if (selectedDepartmentId.value && s?.department_id !== selectedDepartmentId.value) return false
+    if (selectedPaygroup.value && (s?.paygroup ?? '') !== selectedPaygroup.value) return false
+    return true
+  })
 }
 
-watch([selectedCycleId, selectedStaffId], () => { reloadObjectives(); reloadReviews(); reloadRecognitions(); reloadPips() })
+const paygroupOptions = computed(() => {
+  const set = new Set<string>()
+  for (const s of staffMembers.value) {
+    if (s.paygroup) set.add(s.paygroup)
+  }
+  return [...set].sort()
+})
+
+const filteredStaff = computed(() => {
+  return staffMembers.value.filter(s => {
+    if (selectedDepartmentId.value && s.department_id !== selectedDepartmentId.value) return false
+    if (selectedPaygroup.value && (s.paygroup ?? '') !== selectedPaygroup.value) return false
+    return true
+  })
+})
+
+watch([selectedCycleId, selectedStaffId, selectedDepartmentId, selectedPaygroup], () => { reloadObjectives(); reloadReviews(); reloadRecognitions(); reloadPips() })
 watch([reviewStatusFilter, reviewTypeFilter], reloadReviews)
 
 onMounted(loadAll)
@@ -437,6 +468,224 @@ const objectivesByStaff = computed(() => {
 
 const selectedCycle = computed(() => cycles.value.find(c => c.id === selectedCycleId.value) ?? null)
 
+// --- objective bulk import / export ---
+function csvEscape(v: any): string {
+  const s = v == null ? '' : String(v)
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function exportObjectivesCsv() {
+  const headers = ['Staff email', 'Staff name', 'Title', 'Description', 'Category', 'Kind', 'Weight', 'Target', 'Progress', 'Status', 'Manager notes']
+  const staffIndex = new Map(staffMembers.value.map(s => [s.id, s]))
+  const rows = objectives.value.map((o: any) => {
+    const s = staffIndex.get(o.staff_id) ?? {}
+    return [s.email, s.full_name, o.title, o.description, o.category, o.kind, o.weight, o.target_value, o.progress, o.status, o.manager_notes]
+  })
+  const csv = [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `objectives-${selectedCycleId.value || 'all'}-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let cur: string[] = []
+  let field = ''
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') { field += '"'; i++ }
+      else if (ch === '"') inQuotes = false
+      else field += ch
+    } else {
+      if (ch === '"') inQuotes = true
+      else if (ch === ',') { cur.push(field); field = '' }
+      else if (ch === '\n') { cur.push(field); rows.push(cur); cur = []; field = '' }
+      else if (ch === '\r') { /* ignore */ }
+      else field += ch
+    }
+  }
+  if (field.length || cur.length) { cur.push(field); rows.push(cur) }
+  return rows.filter(r => r.some(c => c.length))
+}
+
+function normaliseObjectiveStatus(raw: string): string {
+  const v = (raw || '').trim().toLowerCase()
+  if (!v) return 'draft'
+  if (v === 'on track') return 'on_track'
+  if (v === 'at risk') return 'at_risk'
+  if (v === 'off track') return 'off_track'
+  if (['draft','active','on_track','at_risk','off_track','completed','dropped'].includes(v)) return v
+  return 'active'
+}
+
+function normaliseMeasureStatus(raw: string): string {
+  const v = (raw || '').trim().toLowerCase()
+  if (v === 'on track') return 'on_track'
+  if (v === 'at risk') return 'at_risk'
+  if (v === 'off track') return 'off_track'
+  if (['pending','on_track','at_risk','off_track','done','dropped'].includes(v)) return v
+  return 'pending'
+}
+
+async function bulkUploadObjectives() {
+  if (!selectedCycleId.value) {
+    toast.push({ type: 'error', title: 'Pick a cycle first', message: 'Select the cycle these objectives belong to.' })
+    return
+  }
+  const text = bulkObjectivesText.value.trim()
+  if (!text) return
+  bulkUploading.value = true
+  try {
+    const rows = parseCsv(text)
+    if (rows.length < 2) throw new Error('Need a header row and at least one data row')
+    const headers = rows[0].map(h => h.trim().replace(/^\uFEFF/, '').toLowerCase())
+    const idx = (...names: string[]) => {
+      for (const n of names) {
+        const ix = headers.indexOf(n.toLowerCase())
+        if (ix >= 0) return ix
+      }
+      return -1
+    }
+    const emailIx = idx('staff email', 'employee email', 'email')
+    const nameIx = idx('employee name', 'staff name', 'full name', 'name')
+    const codeIx = idx('employee code', 'staff code')
+    const titleIx = idx('objective title', 'title')
+    const descIx = idx('objective description', 'description')
+    const catIx = idx('category')
+    const kindIx = idx('performance type', 'kind')
+    const objStatusIx = idx('objective status', 'status')
+    const objProgressIx = idx('objective progress', 'progress')
+    const targetIx = idx('target')
+    const notesIx = idx('reviewer comment', 'manager notes')
+    const krTitleIx = idx('key result title')
+    const krDescIx = idx('key result description')
+    const krUnitIx = idx('key result unit', 'unit')
+    const krStartIx = idx('key result start value')
+    const krEndIx = idx('key result end value')
+    const krWeightIx = idx('weight')
+    const krProgressIx = idx('key result progress')
+    const krStatusIx = idx('key result status')
+
+    if (titleIx < 0) throw new Error('Missing required column: Objective Title')
+    if (emailIx < 0 && nameIx < 0) throw new Error('Need either an Email or Employee Name column')
+
+    const staffByEmail = new Map(staffMembers.value.map(s => [(s.email ?? '').toLowerCase(), s]))
+    const staffByName = new Map(staffMembers.value.map(s => [(s.full_name ?? '').toLowerCase().trim(), s]))
+
+    type Group = { staff: any; title: string; description: string; category: string; kind: string; status: string; progress: number; target: string; notes: string; rows: string[][] }
+    const groups = new Map<string, Group>()
+    const errors: string[] = []
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i]
+      const title = (row[titleIx] ?? '').trim()
+      if (!title) continue
+      const email = emailIx >= 0 ? (row[emailIx] ?? '').trim().toLowerCase() : ''
+      const name = nameIx >= 0 ? (row[nameIx] ?? '').trim().toLowerCase() : ''
+      const staff = (email && staffByEmail.get(email)) || (name && staffByName.get(name)) || null
+      if (!staff) {
+        errors.push(`Row ${i + 1}: unknown staff "${row[emailIx] ?? row[nameIx] ?? ''}"`)
+        continue
+      }
+      const key = `${staff.id}::${title.toLowerCase()}`
+      let g = groups.get(key)
+      if (!g) {
+        const kindRaw = (kindIx >= 0 ? row[kindIx] ?? '' : '').trim().toLowerCase()
+        const kind = ['okr', 'kpi', 'competency'].includes(kindRaw) ? kindRaw : 'okr'
+        g = {
+          staff,
+          title,
+          description: descIx >= 0 ? row[descIx] ?? '' : '',
+          category: ((catIx >= 0 ? row[catIx]?.trim().toLowerCase() : '') as string) || 'business',
+          kind,
+          status: normaliseObjectiveStatus(objStatusIx >= 0 ? row[objStatusIx] ?? '' : ''),
+          progress: objProgressIx >= 0 ? Number(row[objProgressIx] || 0) : 0,
+          target: targetIx >= 0 ? row[targetIx] ?? '' : '',
+          notes: notesIx >= 0 ? row[notesIx] ?? '' : '',
+          rows: []
+        }
+        groups.set(key, g)
+      }
+      g.rows.push(row)
+    }
+
+    let createdObjectives = 0
+    let createdMeasures = 0
+    let order = 0
+    for (const g of groups.values()) {
+      try {
+        const framework = frameworks.value.find(f => f.kind === g.kind && f.is_active) ?? null
+        const saved = await saveObjective({
+          cycle_id: selectedCycleId.value,
+          staff_id: g.staff.id,
+          framework_id: framework?.id ?? null,
+          kind: g.kind as any,
+          title: g.title,
+          description: g.description,
+          category: g.category as any,
+          weight: 0,
+          target_value: g.target,
+          progress: Math.round(g.progress),
+          status: g.status as any,
+          manager_notes: g.notes,
+          sort_order: order++
+        } as any)
+        if (!saved?.id) throw new Error('save returned no id')
+        createdObjectives++
+
+        let totalWeight = 0
+        let mIdx = 0
+        for (const r of g.rows) {
+          const krTitle = krTitleIx >= 0 ? (r[krTitleIx] ?? '').trim() : ''
+          if (!krTitle) continue
+          const w = krWeightIx >= 0 ? Number(r[krWeightIx] || 0) : 0
+          totalWeight += w
+          const m = await saveMeasure({
+            objective_id: saved.id,
+            label: krTitle,
+            description: krDescIx >= 0 ? r[krDescIx] ?? '' : '',
+            unit: krUnitIx >= 0 ? r[krUnitIx] ?? '' : '',
+            baseline_value: krStartIx >= 0 ? r[krStartIx] ?? '' : '',
+            target_value: krEndIx >= 0 ? r[krEndIx] ?? '' : '',
+            current_value: '',
+            weight: w,
+            progress: krProgressIx >= 0 ? Number(r[krProgressIx] || 0) : 0,
+            status: normaliseMeasureStatus(krStatusIx >= 0 ? r[krStatusIx] ?? '' : '') as any,
+            sort_order: mIdx++ * 10
+          } as any)
+          if (m?.id) createdMeasures++
+        }
+        if (totalWeight > 0) {
+          await saveObjective({ id: saved.id, weight: Math.round(totalWeight) } as any)
+        }
+      } catch (e: any) {
+        errors.push(`${g.staff.full_name} / ${g.title}: ${e?.message ?? 'failed'}`)
+      }
+    }
+
+    toast.push({
+      type: errors.length && !createdObjectives ? 'error' : 'success',
+      title: `Imported ${createdObjectives} objective${createdObjectives === 1 ? '' : 's'} (${createdMeasures} key results)`,
+      message: errors.length ? errors.slice(0, 3).join(' | ') : 'Bulk upload complete.'
+    })
+    if (createdObjectives) {
+      showBulkUpload.value = false
+      bulkObjectivesText.value = ''
+      await reloadObjectives()
+    }
+  } catch (e: any) {
+    toast.push({ type: 'error', title: 'Could not import', message: e?.message ?? 'Unexpected error' })
+  } finally {
+    bulkUploading.value = false
+  }
+}
+
 // --- recognitions ---
 function startNewRecognition() {
   editingRecognition.value = {
@@ -612,18 +861,31 @@ const ratingDistribution = computed(() => {
       </div>
     </header>
 
-    <nav class="flex flex-wrap gap-2">
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'dashboard' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'dashboard'">Dashboard</button>
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'cycles' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'cycles'">Cycles</button>
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'frameworks' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'frameworks'">Frameworks</button>
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'objectives' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'objectives'">Objectives</button>
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'appraisals' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'appraisals'">Appraisals</button>
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'calibration' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'calibration'">Calibration</button>
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'templates' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'templates'">Templates</button>
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'values' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'values'">Core values</button>
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'reviews' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'reviews'">Reviews</button>
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'recognitions' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'recognitions'">Recognition</button>
-      <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium border" :class="tab === 'pips' ? 'bg-sycamore-600 text-white border-sycamore-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'" @click="tab = 'pips'">Improvement plans</button>
+    <nav class="border-b border-slate-200 -mx-4 sm:mx-0">
+      <div class="flex overflow-x-auto px-4 sm:px-0 gap-6 scrollbar-thin">
+        <button
+          v-for="t in [
+            { id: 'dashboard', label: 'Dashboard' },
+            { id: 'cycles', label: 'Cycles' },
+            { id: 'frameworks', label: 'Frameworks' },
+            { id: 'objectives', label: 'Objectives' },
+            { id: 'appraisals', label: 'Appraisals' },
+            { id: 'calibration', label: 'Calibration' },
+            { id: 'templates', label: 'Templates' },
+            { id: 'values', label: 'Core values' },
+            { id: 'reviews', label: 'Reviews' },
+            { id: 'recognitions', label: 'Recognition' },
+            { id: 'pips', label: 'Plans' }
+          ]"
+          :key="t.id"
+          type="button"
+          class="relative whitespace-nowrap py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px"
+          :class="tab === t.id ? 'text-sycamore-700 border-sycamore-600' : 'text-slate-500 hover:text-slate-800 border-transparent'"
+          @click="tab = t.id as any"
+        >
+          {{ t.label }}
+        </button>
+      </div>
     </nav>
 
     <div v-if="loading" class="card p-8 text-center text-sm text-slate-500">Loading performance data...</div>
@@ -792,7 +1054,7 @@ const ratingDistribution = computed(() => {
     <!-- Objectives ------------------------------------------------------- -->
     <section v-else-if="tab === 'objectives'" class="space-y-4">
       <div class="card p-4 sm:p-5 space-y-3">
-        <div class="grid md:grid-cols-3 gap-3">
+        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
           <label class="block">
             <span class="text-xs font-medium text-slate-600 mb-1 block">Cycle</span>
             <select v-model="selectedCycleId" class="input">
@@ -801,18 +1063,36 @@ const ratingDistribution = computed(() => {
             </select>
           </label>
           <label class="block">
-            <span class="text-xs font-medium text-slate-600 mb-1 block">Staff filter</span>
-            <select v-model="selectedStaffId" class="input">
-              <option value="">All staff</option>
-              <option v-for="s in staffMembers" :key="s.id" :value="s.id">{{ s.full_name }}</option>
+            <span class="text-xs font-medium text-slate-600 mb-1 block">Department</span>
+            <select v-model="selectedDepartmentId" class="input">
+              <option value="">All departments</option>
+              <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
             </select>
           </label>
-          <div class="flex items-end">
-            <button class="btn-primary" :disabled="!selectedCycleId" @click="startNewObjective">New objective</button>
-          </div>
+          <label class="block">
+            <span class="text-xs font-medium text-slate-600 mb-1 block">Paygroup</span>
+            <select v-model="selectedPaygroup" class="input">
+              <option value="">All paygroups</option>
+              <option v-for="p in paygroupOptions" :key="p" :value="p">{{ p }}</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs font-medium text-slate-600 mb-1 block">Employee</span>
+            <select v-model="selectedStaffId" class="input">
+              <option value="">All staff</option>
+              <option v-for="s in filteredStaff" :key="s.id" :value="s.id">{{ s.full_name }}</option>
+            </select>
+          </label>
         </div>
-        <div v-if="selectedCycle" class="text-xs text-slate-500">
-          Selected cycle is <span class="font-semibold">{{ selectedCycle.status }}</span>. Staff can edit their own progress when status is planning, active, or in_review.
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <div v-if="selectedCycle" class="text-xs text-slate-500">
+            Selected cycle is <span class="font-semibold">{{ selectedCycle.status }}</span>. Staff can edit their own progress when status is planning, active, or in_review.
+          </div>
+          <div class="flex flex-wrap gap-2 ml-auto">
+            <button class="btn-secondary text-xs" :disabled="!objectives.length" @click="exportObjectivesCsv">Export CSV</button>
+            <button class="btn-secondary text-xs" :disabled="!selectedCycleId" @click="showBulkUpload = true">Bulk upload</button>
+            <button class="btn-primary text-xs" :disabled="!selectedCycleId" @click="startNewObjective">New objective</button>
+          </div>
         </div>
       </div>
 
@@ -1465,6 +1745,30 @@ const ratingDistribution = computed(() => {
         <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
           <button class="btn-secondary" @click="editingFramework = null">Cancel</button>
           <button class="btn-primary" @click="submitFramework">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk objective upload modal ------------------------------------ -->
+    <div v-if="showBulkUpload" class="fixed inset-0 bg-slate-900/40 z-40 flex items-center justify-center p-4" @click.self="showBulkUpload = false">
+      <div class="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-slate-900">Bulk upload objectives</h3>
+          <button class="text-slate-400 hover:text-slate-600" @click="showBulkUpload = false">Close</button>
+        </div>
+        <div class="text-xs text-slate-500 leading-relaxed space-y-1">
+          <p>Upload a CSV file or paste contents below. The importer matches staff by <span class="font-semibold">Email</span> first, then by <span class="font-semibold">Employee Name</span>.</p>
+          <p>It accepts both the simple template and the appraisal export shape (one row per Key Result, grouped automatically by Objective Title). Recognised columns include: Performance Type, Objective Title, Objective Description, Objective Status, Objective Progress, Reviewer Comment, Key Result Title/Description/Unit/Start Value/End Value, Weight, Key Result Progress.</p>
+        </div>
+        <div>
+          <input type="file" accept=".csv,text/csv" class="block text-xs text-slate-600 file:mr-3 file:px-3 file:py-1.5 file:border-0 file:rounded-md file:bg-sycamore-50 file:text-sycamore-700 file:text-xs file:font-medium hover:file:bg-sycamore-100" @change="async (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) bulkObjectivesText = await f.text() }" />
+        </div>
+        <textarea v-model="bulkObjectivesText" rows="12" class="input font-mono text-xs" placeholder="Paste CSV contents here, or pick a file above"></textarea>
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <button class="btn-secondary" @click="showBulkUpload = false">Cancel</button>
+          <button class="btn-primary" :disabled="bulkUploading || !bulkObjectivesText.trim()" @click="bulkUploadObjectives">
+            {{ bulkUploading ? 'Uploading…' : 'Upload' }}
+          </button>
         </div>
       </div>
     </div>
