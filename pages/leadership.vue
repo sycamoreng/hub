@@ -22,6 +22,13 @@ const sections = computed(() => [
 function initials(name: string) {
   return name.split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase()
 }
+
+function onPhotoError(e: Event) {
+  const el = e.target as HTMLImageElement
+  el.style.display = 'none'
+  const fallback = el.nextElementSibling as HTMLElement | null
+  if (fallback) fallback.style.display = 'flex'
+}
 </script>
 
 <template>
@@ -53,9 +60,9 @@ function initials(name: string) {
         <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           <article v-for="l in s.items" :key="l.id" class="card card-hover p-6">
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0">
-                <img v-if="l.photo_url" :src="l.photo_url" :alt="l.full_name" class="w-16 h-16 rounded-full object-cover border border-slate-200" />
-                <div v-else class="w-16 h-16 rounded-full bg-gradient-to-br from-sycamore-500 to-sycamore-700 text-white flex items-center justify-center font-bold">{{ initials(l.full_name) }}</div>
+              <div class="flex-shrink-0 relative">
+                <img v-if="l.photo_url" :src="l.photo_url" :alt="l.full_name" referrerpolicy="no-referrer" class="w-16 h-16 rounded-full object-cover border border-slate-200" @error="onPhotoError" />
+                <div :style="{ display: l.photo_url ? 'none' : 'flex' }" class="w-16 h-16 rounded-full bg-gradient-to-br from-sycamore-500 to-sycamore-700 text-white items-center justify-center font-bold">{{ initials(l.full_name) }}</div>
               </div>
               <div class="min-w-0">
                 <h3 class="font-bold text-slate-900 truncate">{{ l.full_name }}</h3>

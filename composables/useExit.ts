@@ -111,16 +111,48 @@ export function useExit() {
     const actorId = exitCase.initiated_by_user_id
     const label = exitCase.exit_type === 'resignation' ? 'Resignation' : 'Termination'
     const body = `${label} initiated for ${staffName}. Please review and action your checklist.`
-    const inserts = units
-      .filter(u => !!u.hod_user_id)
-      .map(u => ({
-        recipient_id: u.hod_user_id!,
-        actor_id: actorId,
-        type: 'exit_initiated',
-        title: `${label}: ${staffName}`,
-        body: `${u.name}: ${body}`,
-        link: `/admin/exits?case=${exitCase.id}`
-      }))
+    const recipients = new Map<string, { title: string; body: string }>()
+    for (const u of units) {
+      if (u.hod_user_id) {
+        recipients.set(u.hod_user_id, { title: `${label}: ${staffName}`, body: `${u.name}: ${body}` })
+      }
+    }
+
+    // Always notify Human Capital admins so HR is in the loop even when no
+    // explicit exit-unit HoD has been configured.
+    try {
+      const { data: hcAdmins } = await supabase
+        .from('admin_users')
+        .select('email, role, permissions, function')
+        .or('role.eq.super_admin,function.ilike.%human capital%,function.ilike.%hr%')
+      const emails = (hcAdmins ?? [])
+        .filter((a: any) => a.role === 'super_admin' || !!a.permissions?.staff?.read || /human\s*capital|hr/i.test(a.function || ''))
+        .map((a: any) => (a.email || '').toLowerCase())
+        .filter(Boolean)
+      if (emails.length) {
+        const { data: hcStaff } = await supabase
+          .from('staff_members')
+          .select('auth_user_id, email')
+          .in('email', emails)
+        for (const s of (hcStaff ?? []) as any[]) {
+          if (s.auth_user_id && !recipients.has(s.auth_user_id)) {
+            recipients.set(s.auth_user_id, {
+              title: `${label}: ${staffName}`,
+              body: `Human Capital: ${body}`
+            })
+          }
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    const inserts = Array.from(recipients.entries()).map(([uid, r]) => ({
+      recipient_id: uid,
+      actor_id: actorId,
+      type: 'exit_initiated',
+      title: r.title,
+      body: r.body,
+      link: `/admin/exits?case=${exitCase.id}`
+    }))
     if (inserts.length) {
       try {
         await supabase.from('notifications').insert(inserts)

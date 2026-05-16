@@ -45,6 +45,8 @@ export function useCompanyData() {
       .from('staff_members')
       .select('*, departments!staff_members_department_id_fkey(name), locations(name, city)')
       .eq('is_active', true)
+      .eq('directory_visible', true)
+      .is('exited_at', null)
       .order('full_name')
     if (error) throw error
     return data ?? []

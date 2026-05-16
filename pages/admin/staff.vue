@@ -41,7 +41,9 @@ const fields = computed(() => [
   },
   { key: 'joined_date', label: 'Joined date', type: 'date' },
   { key: 'bio', label: 'Bio', type: 'textarea' },
-  { key: 'is_active', label: 'Active', type: 'checkbox', placeholder: 'Currently employed' }
+  { key: 'is_active', label: 'Active', type: 'checkbox', placeholder: 'Currently employed' },
+  { key: 'directory_visible', label: 'Show in directory', type: 'checkbox', placeholder: 'Visible to staff in the directory and organogram' },
+  { key: 'exited_at', label: 'Exit date', type: 'date', placeholder: 'Set when this person has left the company' }
 ])
 
 const columns = [
@@ -49,7 +51,9 @@ const columns = [
   { key: 'role', label: 'Role' },
   { key: 'email', label: 'Email' },
   { key: 'auth_user_id', label: 'Profile', render: (r: any) => r.auth_user_id ? 'Claimed' : 'Pending' },
-  { key: 'is_active', label: 'Active', render: (r: any) => r.is_active ? 'Yes' : 'No' }
+  { key: 'is_active', label: 'Active', render: (r: any) => r.is_active ? 'Yes' : 'No' },
+  { key: 'directory_visible', label: 'In directory', render: (r: any) => r.directory_visible === false ? 'Hidden' : 'Yes' },
+  { key: 'exited_at', label: 'Exited', render: (r: any) => r.exited_at || '—' }
 ]
 
 await Promise.all([
@@ -60,9 +64,18 @@ await Promise.all([
   (async () => { const { data } = await supabase.from('staff_members').select('id, full_name, role, is_active').eq('is_active', true).order('full_name'); managerCandidates.value = data ?? [] })()
 ])
 
-function openNew() { editing.value = { is_active: true }; editorOpen.value = true }
+function openNew() { editing.value = { is_active: true, directory_visible: true }; editorOpen.value = true }
 function openEdit(row: any) {
-  editing.value = { ...row, department_id: row.department_id ?? '', location_id: row.location_id ?? '', team_id: row.team_id ?? '', manager_id: row.manager_id ?? '', joined_date: row.joined_date ?? '' }
+  editing.value = {
+    ...row,
+    department_id: row.department_id ?? '',
+    location_id: row.location_id ?? '',
+    team_id: row.team_id ?? '',
+    manager_id: row.manager_id ?? '',
+    joined_date: row.joined_date ?? '',
+    exited_at: row.exited_at ?? '',
+    directory_visible: row.directory_visible !== false
+  }
   editorOpen.value = true
 }
 
@@ -75,7 +88,9 @@ async function save(payload: Record<string, any>) {
       full_name: payload.full_name, email: payload.email, phone: payload.phone ?? '', role: payload.role,
       department_id: payload.department_id || null, location_id: payload.location_id || null,
       team_id: payload.team_id || null, manager_id: payload.manager_id || null,
-      joined_date: payload.joined_date || null, bio: payload.bio ?? '', is_active: !!payload.is_active
+      joined_date: payload.joined_date || null, bio: payload.bio ?? '', is_active: !!payload.is_active,
+      directory_visible: payload.directory_visible !== false,
+      exited_at: payload.exited_at || null
     }
     let staffId = editing.value?.id
     if (staffId) {

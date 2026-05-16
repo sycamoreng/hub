@@ -25,9 +25,11 @@ async function loadPerms() {
   const role = (data as any)?.role ?? ''
   const perms = ((data as any)?.permissions as any) ?? {}
   const isSuper = role === 'super_admin'
+  const hasUpdate = (key: string) => !!perms?.[key]?.update || !!perms?.[key]?.create
+  const payrollAccess = hasUpdate('payroll')
   myPerms.value = {
-    hc: isSuper || role === 'admin' || !!perms?.staff?.manage || !!perms?.leave?.manage,
-    finance: isSuper || role === 'admin' || !!perms?.payroll?.manage || !!perms?.finance?.manage
+    hc: isSuper || hasUpdate('finance_hc') || payrollAccess,
+    finance: isSuper || hasUpdate('finance_finance') || payrollAccess
   }
 }
 

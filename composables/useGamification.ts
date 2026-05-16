@@ -258,7 +258,7 @@ export function useGamification() {
       return count ?? 0
     }
     if (metric === 'comments_count') {
-      const { count } = await supabase.from('comments').select('id', { count: 'exact', head: true }).eq('author_id', userId)
+      const { count } = await supabase.from('comments').select('id', { count: 'exact', head: true }).eq('user_id', userId)
       return count ?? 0
     }
     if (metric === 'kudos_given_count') {

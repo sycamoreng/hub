@@ -50,6 +50,8 @@ const SECTIONS = [
   { key: 'performance', label: 'Performance' },
   { key: 'appointments', label: 'Appointments' },
   { key: 'payroll', label: 'Payroll & Finance' },
+  { key: 'finance_hc', label: 'Finance Requests - HC Review' },
+  { key: 'finance_finance', label: 'Finance Requests - Finance Review' },
   { key: 'attendance', label: 'Attendance & Leave' },
   { key: 'gamification', label: 'Gamification' },
   { key: 'raffle', label: 'Raffle' }

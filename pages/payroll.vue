@@ -82,6 +82,8 @@ function periodLabel(it: any) {
             <th class="text-left px-5 py-2">Period</th>
             <th class="text-left px-5 py-2">Status</th>
             <th class="text-right px-5 py-2">Gross</th>
+            <th class="text-right px-5 py-2">Tax (PAYE)</th>
+            <th class="text-right px-5 py-2">Other deductions</th>
             <th class="text-right px-5 py-2">Net</th>
             <th class="text-right px-5 py-2"></th>
           </tr>
@@ -96,6 +98,10 @@ function periodLabel(it: any) {
               </span>
             </td>
             <td class="px-5 py-3 text-right tabular-nums">{{ formatNaira(it.gross) }}</td>
+            <td class="px-5 py-3 text-right tabular-nums text-rose-700">{{ formatNaira(it.paye) }}</td>
+            <td class="px-5 py-3 text-right tabular-nums text-slate-600">
+              {{ formatNaira(Number(it.pension_employee || 0) + Number(it.nhf || 0) + Number(it.nhis || 0) + Number(it.other_deductions || 0)) }}
+            </td>
             <td class="px-5 py-3 text-right tabular-nums font-semibold">{{ formatNaira(it.net) }}</td>
             <td class="px-5 py-3 text-right"><button type="button" @click="selected = it" class="text-sycamore-700 font-medium">View</button></td>
           </tr>
@@ -128,14 +134,27 @@ function periodLabel(it: any) {
               <div class="flex justify-between pt-2 border-t border-slate-100 font-semibold"><dt>Gross</dt><dd class="tabular-nums">{{ formatNaira(selected.gross) }}</dd></div>
             </dl>
           </section>
+          <section class="bg-rose-50 border border-rose-200 rounded-lg p-4">
+            <div class="flex items-center justify-between text-sm">
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-wide text-rose-800">Tax (PAYE)</div>
+                <div class="text-[11px] text-rose-700/80 mt-0.5">Effective rate {{ selected.gross > 0 ? ((Number(selected.paye) / Number(selected.gross)) * 100).toFixed(1) : '0.0' }}% of gross</div>
+              </div>
+              <div class="text-lg font-bold text-rose-900 tabular-nums">{{ formatNaira(selected.paye) }}</div>
+            </div>
+          </section>
           <section>
             <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Deductions</h4>
             <dl class="space-y-1 text-sm">
               <div class="flex justify-between"><dt class="text-slate-600">Pension (8%)</dt><dd class="tabular-nums">{{ formatNaira(selected.pension_employee) }}</dd></div>
               <div class="flex justify-between"><dt class="text-slate-600">NHF</dt><dd class="tabular-nums">{{ formatNaira(selected.nhf) }}</dd></div>
               <div class="flex justify-between"><dt class="text-slate-600">NHIS</dt><dd class="tabular-nums">{{ formatNaira(selected.nhis) }}</dd></div>
-              <div class="flex justify-between"><dt class="text-slate-600">PAYE</dt><dd class="tabular-nums">{{ formatNaira(selected.paye) }}</dd></div>
+              <div class="flex justify-between"><dt class="text-slate-600">PAYE (income tax)</dt><dd class="tabular-nums">{{ formatNaira(selected.paye) }}</dd></div>
               <div class="flex justify-between"><dt class="text-slate-600">Other</dt><dd class="tabular-nums">{{ formatNaira(selected.other_deductions) }}</dd></div>
+              <div class="flex justify-between pt-2 border-t border-slate-100 font-semibold">
+                <dt>Total deductions</dt>
+                <dd class="tabular-nums">{{ formatNaira(Number(selected.pension_employee || 0) + Number(selected.nhf || 0) + Number(selected.nhis || 0) + Number(selected.paye || 0) + Number(selected.other_deductions || 0)) }}</dd>
+              </div>
             </dl>
           </section>
           <section class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-center justify-between">

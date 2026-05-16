@@ -262,6 +262,12 @@ async function runSync(ctx: SyncContext) {
       }
       void deptId
 
+      // Respect directory hide-flag and explicit exits: don't flip is_active
+      // back on for hidden mailboxes or staff already marked as exited.
+      if (existing && (existing.directory_visible === false || existing.exited_at)) {
+        desired.is_active = existing.is_active === true ? true : false
+      }
+
       if (!existing) {
         diff.push({
           email,
