@@ -180,6 +180,7 @@ async function save() {
     added_by: profile.value?.email || '',
     updated_at: new Date().toISOString()
   }
+  const isCreate = !editingEmail.value
   const { error: e } = editingEmail.value
     ? await supabase.from('admin_users').update(payload).eq('email', editingEmail.value)
     : await supabase.from('admin_users').insert(payload)
@@ -188,9 +189,33 @@ async function save() {
     error.value = e.message
     return
   }
+  if (isCreate) {
+    void notifyAdminAdded(email, payload.role, profile.value?.display_name || profile.value?.email || '')
+    toast.success(`Admin added. ${email} will be emailed shortly.`)
+  }
   showForm.value = false
   resetForm()
   await load()
+}
+
+async function notifyAdminAdded(emailAddr: string, role: 'admin'|'super_admin', addedBy: string) {
+  try {
+    const config = useRuntimeConfig()
+    const supabaseUrl = config.public.supabaseUrl as string
+    const anonKey = config.public.supabaseAnonKey as string
+    if (!supabaseUrl || !anonKey) return
+    const { data: session } = await supabase.auth.getSession()
+    await fetch(`${supabaseUrl}/functions/v1/email/notify_admin_added`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.session?.access_token ?? anonKey}`
+      },
+      body: JSON.stringify({ email: emailAddr, role, added_by: addedBy })
+    })
+  } catch {
+    /* fire and forget */
+  }
 }
 
 async function removeAdmin(row: AdminRow) {

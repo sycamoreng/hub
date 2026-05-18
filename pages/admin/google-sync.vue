@@ -119,11 +119,36 @@ function effectiveAction(email: string): 'include'|'exclude' {
 }
 
 const existingEmails = ref<Set<string>>(new Set())
-const staffRecords = ref<Array<{ id: string; full_name: string; email: string; is_active: boolean }>>([])
+const staffRecords = ref<Array<{ id: string; full_name: string; email: string; is_active: boolean; created_at: string; department_id: string | null }>>([])
 async function loadExistingStaffEmails() {
-  const { data } = await supabase.from('staff_members').select('id, full_name, email, is_active')
+  const { data } = await supabase.from('staff_members').select('id, full_name, email, is_active, created_at, department_id')
   staffRecords.value = (data ?? []) as any
   existingEmails.value = new Set((data ?? []).map((r: any) => (r.email ?? '').toLowerCase()))
+}
+
+const recentlyAddedRange = ref<7 | 14 | 30 | 90>(14)
+const recentlyAddedStaff = computed(() => {
+  const cutoff = Date.now() - recentlyAddedRange.value * 24 * 60 * 60 * 1000
+  return [...staffRecords.value]
+    .filter(s => s.created_at && new Date(s.created_at).getTime() >= cutoff)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+})
+
+function deptName(id: string | null): string {
+  if (!id) return ''
+  return departments.value.find(d => d.id === id)?.name ?? ''
+}
+
+function fmtRelative(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime()
+  const days = Math.floor(diff / (24 * 60 * 60 * 1000))
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days} days ago`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 5) return `${weeks} week${weeks === 1 ? '' : 's'} ago`
+  const months = Math.floor(days / 30)
+  return `${months} month${months === 1 ? '' : 's'} ago`
 }
 
 const googleEmails = computed(() => new Set(googleUsers.value.map(u => u.email.toLowerCase())))
@@ -381,6 +406,42 @@ onMounted(async () => {
           <span class="px-2 text-xs text-slate-600">Page {{ runsPage }} of {{ runsTotalPages }}</span>
           <button class="px-2 py-1 rounded border border-slate-200 text-xs disabled:opacity-40" :disabled="runsPage >= runsTotalPages" @click="runsPage += 1">Next</button>
         </div>
+      </div>
+
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+          <div class="min-w-0">
+            <h2 class="text-sm font-semibold text-slate-900">Recently added to staff</h2>
+            <p class="text-xs text-slate-500">New staff records created in the last {{ recentlyAddedRange }} days, regardless of how they were added.</p>
+          </div>
+          <div class="flex items-center gap-1 bg-slate-100 rounded-full p-0.5">
+            <button
+              v-for="r in ([7, 14, 30, 90] as const)"
+              :key="r"
+              type="button"
+              class="px-3 py-1 text-xs rounded-full transition-colors"
+              :class="recentlyAddedRange === r ? 'bg-white text-slate-900 shadow-sm font-medium' : 'text-slate-500 hover:text-slate-700'"
+              @click="recentlyAddedRange = r"
+            >{{ r }}d</button>
+          </div>
+        </div>
+        <div v-if="!recentlyAddedStaff.length" class="text-xs text-slate-400">No staff records were created in the last {{ recentlyAddedRange }} days.</div>
+        <ul v-else class="divide-y divide-slate-100">
+          <li v-for="s in recentlyAddedStaff" :key="s.id" class="flex items-center justify-between gap-3 py-2.5">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-sm font-medium text-slate-800 truncate">{{ s.full_name || s.email }}</span>
+                <span v-if="!s.is_active" class="badge badge-slate">inactive</span>
+                <span v-if="deptName(s.department_id)" class="text-[11px] text-slate-500">{{ deptName(s.department_id) }}</span>
+              </div>
+              <div class="text-xs text-slate-500 truncate">{{ s.email }}</div>
+            </div>
+            <div class="text-xs text-slate-500 shrink-0 text-right">
+              <div class="text-slate-700 font-medium">{{ fmtRelative(s.created_at) }}</div>
+              <div class="text-[11px]">{{ fmtTime(s.created_at) }}</div>
+            </div>
+          </li>
+        </ul>
       </div>
 
       <div class="card p-4">

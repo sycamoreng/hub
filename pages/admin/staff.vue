@@ -56,6 +56,28 @@ const columns = [
   { key: 'exited_at', label: 'Exited', render: (r: any) => r.exited_at || '—' }
 ]
 
+const statusFilter = ref<'all'|'active'|'inactive'|'exited'>('all')
+
+const filteredItems = computed(() => {
+  return items.value.filter((r: any) => {
+    if (statusFilter.value === 'active') return r.is_active && !r.exited_at
+    if (statusFilter.value === 'inactive') return !r.is_active && !r.exited_at
+    if (statusFilter.value === 'exited') return !!r.exited_at
+    return true
+  })
+})
+
+const statusCounts = computed(() => {
+  const all = items.value.length
+  let active = 0, inactive = 0, exited = 0
+  for (const r of items.value as any[]) {
+    if (r.exited_at) exited++
+    else if (r.is_active) active++
+    else inactive++
+  }
+  return { all, active, inactive, exited }
+})
+
 await Promise.all([
   load([{ column: 'full_name', ascending: true }]),
   (async () => { const { data } = await supabase.from('departments').select('id, name').order('name'); departments.value = data ?? [] })(),
@@ -128,7 +150,31 @@ async function del(row: any) {
 
 <template>
   <div class="max-w-6xl">
-    <AdminList title="Staff" description="Manage staff directory entries." :columns="columns" :rows="items" :loading="loading" new-label="New staff member" @new="openNew" @edit="openEdit" @delete="del" />
+    <div class="mb-4 flex flex-wrap items-center gap-2">
+      <span class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mr-1">Filter</span>
+      <button
+        v-for="opt in ([
+          { key: 'all', label: 'All', count: statusCounts.all },
+          { key: 'active', label: 'Active', count: statusCounts.active },
+          { key: 'inactive', label: 'Inactive', count: statusCounts.inactive },
+          { key: 'exited', label: 'Exited', count: statusCounts.exited }
+        ] as const)"
+        :key="opt.key"
+        type="button"
+        class="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors inline-flex items-center gap-1.5"
+        :class="statusFilter === opt.key
+          ? 'bg-sycamore-600 text-white border-sycamore-600'
+          : 'bg-white text-slate-600 border-slate-200 hover:border-sycamore-300 hover:text-sycamore-700'"
+        @click="statusFilter = opt.key"
+      >
+        {{ opt.label }}
+        <span class="text-[10px] px-1.5 py-0.5 rounded-full"
+          :class="statusFilter === opt.key ? 'bg-white/20' : 'bg-slate-100 text-slate-500'">
+          {{ opt.count }}
+        </span>
+      </button>
+    </div>
+    <AdminList title="Staff" description="Manage staff directory entries." :columns="columns" :rows="filteredItems" :loading="loading" new-label="New staff member" @new="openNew" @edit="openEdit" @delete="del" />
     <AdminEditor :open="editorOpen" :title="editing?.id ? 'Edit staff member' : 'New staff member'" :fields="(fields as any)" :initial="editing" :saving="saving" @close="editorOpen = false" @save="save" />
   </div>
 </template>

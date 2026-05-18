@@ -656,6 +656,53 @@ async function notifyUser(adminClient: ReturnType<typeof createClient>, args: {
   return { queued: ok ? 1 : 0 };
 }
 
+async function notifyAdminAdded(adminClient: ReturnType<typeof createClient>, args: {
+  email: string;
+  role: "admin" | "super_admin";
+  added_by?: string;
+}) {
+  const settings = await getSettings(adminClient);
+  if (!settings || (settings as any).default_enabled === false) return { queued: 0 };
+  const targetEmail = (args.email || "").toLowerCase().trim();
+  if (!targetEmail) return { queued: 0 };
+
+  const { data: staff } = await adminClient
+    .from("staff_members")
+    .select("id, full_name, email, auth_user_id")
+    .ilike("email", targetEmail)
+    .maybeSingle();
+
+  const recipientName = (staff as any)?.full_name || targetEmail;
+  const authUserId = (staff as any)?.auth_user_id ?? null;
+
+  let unsubToken = "";
+  if (authUserId) {
+    const prefs = await ensurePrefs(adminClient, authUserId);
+    unsubToken = (prefs as any)?.unsubscribe_token ?? "";
+  }
+
+  const appUrl = await appBaseUrlFromSettings(adminClient);
+  const roleLabel = args.role === "super_admin" ? "Super Admin" : "Admin";
+  const addedBy = (args.added_by || "").trim() || "A super admin";
+  const base = {
+    first_name: firstName(recipientName),
+    role_label: roleLabel,
+    added_by: addedBy,
+    link_url: appUrl ? `${appUrl.replace(/\/$/, "")}/admin` : appUrl,
+    link_label: "Open admin",
+  };
+  const vars = buildVars(base, settings, unsubToken, appUrl);
+  const ok = await queueFromTemplate(
+    adminClient,
+    "admin_access_granted",
+    { email: targetEmail, name: recipientName, user_id: authUserId, unsubscribe_token: unsubToken },
+    vars,
+    "admin_access_granted",
+    { admin_email: targetEmail, role: args.role },
+  );
+  return { queued: ok ? 1 : 0 };
+}
+
 function isServiceRoleBearer(authHeader: string) {
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -740,6 +787,17 @@ Deno.serve(async (req: Request) => {
         link_path: body.link_path,
         link_label: body.link_label,
         trigger: body.trigger,
+      });
+      runQueue(adminClient, 50).catch(() => {});
+      return json(out);
+    }
+    if (action === "notify_admin_added") {
+      const body = await req.json().catch(() => ({}));
+      if (!body.email || !body.role) return json({ error: "email and role required" }, 400);
+      const out = await notifyAdminAdded(adminClient, {
+        email: body.email,
+        role: body.role === "super_admin" ? "super_admin" : "admin",
+        added_by: body.added_by,
       });
       runQueue(adminClient, 50).catch(() => {});
       return json(out);

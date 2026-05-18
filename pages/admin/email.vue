@@ -14,14 +14,20 @@ const running = ref(false)
 
 const queueStats = ref({ pending: 0, sent: 0, failed: 0 })
 const recentLogs = ref<any[]>([])
+const adminAccessEmails = ref<any[]>([])
 
 async function load() {
   loading.value = true
   try {
-    const [{ data: s }, logs, counts] = await Promise.all([
+    const [{ data: s }, logs, counts, adminAccess] = await Promise.all([
       supabase.from('email_settings').select('*').order('created_at', { ascending: true }).limit(1).maybeSingle(),
       supabase.from('email_log').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('email_queue').select('status')
+      supabase.from('email_queue').select('status'),
+      supabase.from('email_queue')
+        .select('id,to_email,status,attempts,last_error,sent_at,created_at,subject')
+        .eq('template_slug', 'admin_access_granted')
+        .order('created_at', { ascending: false })
+        .limit(15)
     ])
     settings.value = s ?? {
       from_name: 'Sycamore Info Hub',
@@ -35,6 +41,7 @@ async function load() {
       service_token: ''
     }
     recentLogs.value = logs.data ?? []
+    adminAccessEmails.value = adminAccess.data ?? []
     const rows = counts.data ?? []
     queueStats.value = {
       pending: rows.filter((r: any) => r.status === 'pending' || r.status === 'sending').length,
@@ -210,6 +217,33 @@ async function runQueue() {
         <button class="btn-primary" :disabled="running" @click="runQueue"><span v-if="running">Running...</span><span v-else>Run queue now</span></button>
       </div>
       <p class="text-xs text-slate-500">The queue runs automatically after each announcement is saved. Use "Run queue now" to retry failed sends.</p>
+    </section>
+
+    <section class="card p-6">
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900">Admin access emails</h2>
+          <p class="text-xs text-slate-500 mt-1">Tracking emails sent when a user is granted admin access. "sent" means the message was accepted by SendGrid; if a recipient never received it, check SendGrid's Activity feed for bounces or suppressions.</p>
+        </div>
+      </div>
+      <div v-if="adminAccessEmails.length === 0" class="text-sm text-slate-400">No admin-access emails yet.</div>
+      <ul v-else class="divide-y divide-slate-100">
+        <li v-for="row in adminAccessEmails" :key="row.id" class="py-3 flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-slate-900 truncate">{{ row.to_email }}</div>
+            <div class="text-xs text-slate-500 truncate">{{ row.subject }}</div>
+            <div v-if="row.last_error" class="text-xs text-rose-600 truncate">{{ row.last_error }}</div>
+          </div>
+          <div class="flex-shrink-0 flex items-center gap-3">
+            <span class="text-xs text-slate-400" v-if="row.attempts">attempts: {{ row.attempts }}</span>
+            <span class="badge" :class="row.status === 'sent' ? 'badge-green' : row.status === 'failed' ? 'badge-rose' : 'badge-slate'">{{ row.status }}</span>
+            <span class="text-xs text-slate-400">{{ new Date(row.sent_at || row.created_at).toLocaleString('en-GB') }}</span>
+          </div>
+        </li>
+      </ul>
+      <p class="text-xs text-slate-500 mt-4">
+        Tip: open <a href="https://app.sendgrid.com/email_activity" target="_blank" rel="noopener" class="text-sycamore-700 underline">SendGrid Activity</a> and search the recipient address to see delivery, bounce, or suppression status.
+      </p>
     </section>
 
     <section class="card p-6">
