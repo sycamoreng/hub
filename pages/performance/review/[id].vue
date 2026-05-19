@@ -338,6 +338,40 @@ function statusBadge(status: string) {
         </div>
       </section>
 
+      <section v-if="review.reviewer_type === 'manager' || review.reviewer_type === 'self'" class="card p-5 space-y-4">
+        <header>
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Recommendation</h2>
+          <p class="text-xs text-slate-500 mt-1">Based on performance this cycle, what outcome do you recommend for this person?</p>
+        </header>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <label class="block">
+            <span class="text-xs font-medium text-slate-600 mb-1 block">Recommended outcome</span>
+            <select
+              :value="review.recommendation ?? ''"
+              :disabled="!canEdit"
+              class="input"
+              @change="(e) => saveHeader({ recommendation: (e.target as HTMLSelectElement).value || null })"
+            >
+              <option value="">-- Select --</option>
+              <option value="promotion">Promotion</option>
+              <option value="same_grade">Stay on same grade</option>
+              <option value="pip">Performance Improvement Plan (PIP)</option>
+              <option value="termination">Termination</option>
+            </select>
+          </label>
+        </div>
+        <label class="block">
+          <span class="text-xs font-medium text-slate-600 mb-1 block">Justification</span>
+          <textarea
+            :value="review.recommendation_notes ?? ''"
+            rows="3" class="input"
+            :disabled="!canEdit"
+            placeholder="Why are you recommending this outcome?"
+            @change="(e) => saveHeader({ recommendation_notes: (e.target as HTMLTextAreaElement).value })"
+          ></textarea>
+        </label>
+      </section>
+
       <div v-if="canEdit" class="flex flex-wrap gap-2 justify-end">
         <button class="btn-secondary" @click="openDecline">Decline</button>
         <button class="btn-primary" :disabled="saving" @click="submit">

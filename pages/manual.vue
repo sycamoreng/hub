@@ -77,11 +77,13 @@ const sections: Section[] = [
   },
   {
     id: 'daily-spark',
-    title: '7. Daily Spark & Wordle',
-    intro: 'Quick daily games that keep the hub lively.',
+    title: '7. Daily Spark, Wordle & Games',
+    intro: 'Quick daily games that keep the hub lively and earn you leaderboard points.',
     items: [
       { name: 'Daily Spark', detail: 'A single multiple-choice question (A/B/C/D) appears on the home page each day. Pick an answer to score — a correct answer earns the full points.' },
-      { name: 'Daily Wordle', detail: 'Guess the word of the day within the allowed attempts. A win adds points to your leaderboard total and unlocks streak badges.' }
+      { name: 'Daily Wordle', detail: 'Guess the word of the day within the allowed attempts. A win adds points to your leaderboard total and unlocks streak badges.' },
+      { name: 'Typing Sprint', detail: 'Test your typing speed on the Typing Sprint page. Race against yourself or challenge colleagues in real-time multiplayer matches. Your best WPM appears on the leaderboard.' },
+      { name: 'Dino Runner', detail: 'A quick endless-runner game accessible from the sidebar. Compete for high scores against your colleagues on the Dino Runner leaderboard.' }
     ]
   },
   {
@@ -95,12 +97,14 @@ const sections: Section[] = [
   },
   {
     id: 'payroll-finance',
-    title: '9. Payroll, Finance & Benefits',
-    intro: 'Your pay and benefits, in one place.',
+    title: '9. Payroll, Finance, Benefits & HMO',
+    intro: 'Your pay, benefits and health cover, in one place.',
     items: [
       { name: 'Payroll', detail: 'The Payroll page shows your payslips and employee details. Contact the admin team if anything looks off.' },
       { name: 'Advance & Loans', detail: 'Submit advance and loan requests from the Finance page. Attach supporting documents where required; your manager and finance admins will review.' },
-      { name: 'Benefits & perks', detail: 'The Benefits page lists every perk the company offers, with eligibility and how to claim.' }
+      { name: 'Benefits & perks', detail: 'The Benefits page lists every perk the company offers, with eligibility and how to claim.' },
+      { name: 'HMO', detail: 'View your HMO enrolment status and browse the list of approved healthcare providers. The HMO Providers page shows contact details, plans available, and coverage areas.' },
+      { name: 'Appointments', detail: 'Book internal appointments (HR check-ins, IT support, etc.) from the Appointments page. Pick a date, time and subject — the relevant team is notified automatically.' }
     ]
   },
   {
@@ -120,7 +124,7 @@ const sections: Section[] = [
     items: [
       { name: 'Communication hub', detail: 'The Communication page collects announcements, broadcasts and key messages in one stream for easy reference.' },
       { name: 'Key contacts & Calendar', detail: 'Key Contacts lists emergency and operational contacts. The Calendar page shows company events, holidays and scheduled activities.' },
-      { name: 'AI chat assistant', detail: 'The chat widget (bottom-right on every page) answers questions from the hub\'s own knowledge base — products, policies, benefits, contacts, departments, locations, onboarding, leadership and general company info. It will not answer off-topic questions.' }
+      { name: 'AI chat assistant', detail: 'The chat widget (bottom-right on every page) answers questions using the hub\'s knowledge base — products, policies, benefits, contacts, departments, locations, onboarding, leadership and general company info. It also searches uploaded documents (manuals, guides, handbooks) that admins have added to the knowledge base. It will not answer off-topic questions.' }
     ]
   },
   {
@@ -132,8 +136,10 @@ const sections: Section[] = [
       { name: 'People management', detail: 'Add and edit staff, teams, admins and page access. The Google Sync page imports or refreshes staff from Google Workspace.' },
       { name: 'Content', detail: 'Curate policies, benefits, products, technology, contacts, onboarding modules, learning assignments and email templates.' },
       { name: 'Gamification', detail: 'Adjust point weights, kudos values, badges (including bonus points) and Daily Sparks.' },
-      { name: 'Operations', detail: 'Run payroll, approve leave, review finance requests, manage attendance and schedule templates.' },
-      { name: 'Integrations', detail: 'Configure Google chat spaces and broadcasts for reaching every channel at once.' }
+      { name: 'Operations', detail: 'Run payroll, approve leave, review finance requests, manage attendance, schedule templates and appointments.' },
+      { name: 'Integrations', detail: 'Configure Google chat spaces and broadcasts for reaching every channel at once.' },
+      { name: 'Chatbot & Knowledge Base', detail: 'Configure the AI assistant, upload documents to the knowledge base (policies, manuals, guides), and manage what the chatbot knows. Uploaded files are automatically chunked and made searchable.' },
+      { name: 'Audit log', detail: 'Super admins can view a full history of all admin actions — who did what and when. Filter by admin, action type or section. Last-active timestamps are visible on the Admin Access page.' }
     ]
   },
   {

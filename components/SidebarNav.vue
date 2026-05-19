@@ -34,7 +34,8 @@ const rewardsGroup = computed<NavGroup>(() => {
   const items: NavItem[] = [
     { to: '/recognition', label: 'Recognition', icon: 'star' },
     { to: '/wordle', label: 'Daily Wordle', icon: 'sparkle' },
-    { to: '/typing', label: 'Typing Sprint', icon: 'sparkle' }
+    { to: '/typing', label: 'Typing Sprint', icon: 'sparkle' },
+    { to: '/dino', label: 'Sycamore Run', icon: 'sparkle' }
   ]
   if (raffleVisible.value) {
     items.push({ to: '/raffle', label: "Workers' Day Raffle", icon: 'gift' })

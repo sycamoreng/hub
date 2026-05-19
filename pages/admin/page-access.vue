@@ -39,7 +39,9 @@ const pages: PageEntry[] = [
   { path: '/tools', label: 'Tools', group: 'Productivity' },
   { path: '/onboarding', label: 'Learning', group: 'Productivity' },
   { path: '/typing', label: 'Typing Sprint', group: 'Rewards & Play' },
-  { path: '/appointments', label: 'Appointments', group: 'Productivity' }
+  { path: '/dino', label: 'Dino Runner', group: 'Rewards & Play' },
+  { path: '/appointments', label: 'Appointments', group: 'Productivity' },
+  { path: '/hmo', label: 'HMO', group: 'People & Culture' }
 ]
 
 const grouped = computed(() => {

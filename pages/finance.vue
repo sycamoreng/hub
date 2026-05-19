@@ -54,7 +54,7 @@ function statusLabel(r: any): string {
   }
   if (r.status === 'hc_approved') return 'Awaiting Finance'
   if (r.status === 'approved') return 'Approved'
-  if (r.status === 'rejected') return 'Rejected'
+  if (r.status === 'declined') return 'Declined'
   if (r.status === 'cancelled') return 'Cancelled'
   return r.status
 }

@@ -90,6 +90,14 @@ export const REVIEWER_TYPE_LABELS: Record<ReviewerType, string> = {
   downward: 'Downward review'
 }
 
+export type RecommendationType = 'promotion' | 'pip' | 'same_grade' | 'termination'
+export const RECOMMENDATION_LABELS: Record<RecommendationType, string> = {
+  promotion: 'Promotion',
+  same_grade: 'Stay on same grade',
+  pip: 'Performance Improvement Plan',
+  termination: 'Termination'
+}
+
 export interface PerformanceReview {
   id: string
   cycle_id: string
@@ -107,6 +115,8 @@ export interface PerformanceReview {
   overall_comment: string
   strengths: string
   improvements: string
+  recommendation: RecommendationType | null
+  recommendation_notes: string
   created_at: string
   updated_at: string
 }

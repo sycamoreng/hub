@@ -15,6 +15,7 @@ const groups: NavGroup[] = [
     icon: 'users',
     items: [
       { to: '/admin/staff', label: 'Staff', icon: 'users', section: 'staff' },
+      { to: '/admin/staff-analytics', label: 'Staff Analytics', icon: 'chart', section: 'staff' },
       { to: '/admin/leadership', label: 'Leadership', icon: 'star', section: 'leadership' },
       { to: '/admin/departments', label: 'Departments', icon: 'building', section: 'departments' },
       { to: '/admin/teams', label: 'Teams', icon: 'users', section: 'departments' },
@@ -76,6 +77,7 @@ const groups: NavGroup[] = [
     icon: 'star',
     items: [
       { to: '/admin/admins', label: 'Admin Access', icon: 'users', superAdminOnly: true },
+      { to: '/admin/audit-log', label: 'Audit Log', icon: 'book', superAdminOnly: true },
       { to: '/admin/page-access', label: 'Page Access', icon: 'check', superAdminOnly: true },
       { to: '/admin/sidebar-order', label: 'Sidebar Order', icon: 'arrow-right', superAdminOnly: true },
       { to: '/admin/google-sync', label: 'Google Sync', icon: 'sparkle', superAdminOnly: true }

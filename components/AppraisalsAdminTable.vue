@@ -140,6 +140,7 @@ function openEdit(a: any) {
     status: a.status,
     rating_tag: a.rating_tag ?? '',
     nine_box_position: a.nine_box_position ?? '',
+    recommendation: a.recommendation ?? '',
     notes: a.notes ?? '',
     objective_weight: a.objective_weight,
     behavioural_weight: a.behavioural_weight
@@ -154,6 +155,7 @@ async function saveEdit() {
       status: editing.value.status,
       rating_tag: editing.value.rating_tag,
       nine_box_position: editing.value.nine_box_position,
+      recommendation: editing.value.recommendation || null,
       notes: editing.value.notes,
       objective_weight: Number(editing.value.objective_weight) || 0,
       behavioural_weight: Number(editing.value.behavioural_weight) || 0
@@ -400,6 +402,7 @@ function ratingClass(label: string): string {
               <th class="text-left py-3 px-4">Status</th>
               <th class="text-left py-3 px-4">9-Box</th>
               <th class="text-left py-3 px-4">Tag</th>
+              <th class="text-left py-3 px-4">Recommendation</th>
               <th class="text-right py-3 px-4">Final</th>
               <th class="text-left py-3 px-4">Rating</th>
               <th class="text-left py-3 px-4">Appraiser</th>
@@ -431,6 +434,17 @@ function ratingClass(label: string): string {
               </td>
               <td class="py-3 px-4 text-xs text-slate-600">{{ a.nine_box_position || '—' }}</td>
               <td class="py-3 px-4 text-xs text-slate-600">{{ a.rating_tag || '—' }}</td>
+              <td class="py-3 px-4">
+                <span v-if="a.recommendation" class="inline-block px-2 py-0.5 rounded-full text-xs font-medium border"
+                  :class="{
+                    'bg-emerald-50 text-emerald-700 border-emerald-200': a.recommendation === 'promotion',
+                    'bg-slate-100 text-slate-600 border-slate-200': a.recommendation === 'same_grade',
+                    'bg-amber-50 text-amber-700 border-amber-200': a.recommendation === 'pip',
+                    'bg-rose-50 text-rose-700 border-rose-200': a.recommendation === 'termination'
+                  }"
+                >{{ { promotion: 'Promotion', same_grade: 'Same grade', pip: 'PIP', termination: 'Termination' }[a.recommendation] }}</span>
+                <span v-else class="text-xs text-slate-400">—</span>
+              </td>
               <td class="py-3 px-4 text-right font-bold text-slate-900">{{ Number(a.final_score).toFixed(2) }}</td>
               <td class="py-3 px-4">
                 <span :class="ratingClass(a.rating_label)">{{ a.rating_label || '—' }}</span>
@@ -568,6 +582,16 @@ function ratingClass(label: string): string {
               <option value="Enigma">Enigma</option>
               <option value="Growth Employee">Growth Employee</option>
               <option value="Future Leader">Future Leader</option>
+            </select>
+          </label>
+          <label class="block text-xs font-medium text-slate-600">
+            <span class="block mb-1 uppercase tracking-wide">Recommendation</span>
+            <select v-model="editing.recommendation" class="input">
+              <option value="">Not set</option>
+              <option value="promotion">Promotion</option>
+              <option value="same_grade">Stay on same grade</option>
+              <option value="pip">Performance Improvement Plan (PIP)</option>
+              <option value="termination">Termination</option>
             </select>
           </label>
           <label class="block text-xs font-medium text-slate-600">

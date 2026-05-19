@@ -15,6 +15,7 @@ interface AdminRow {
   sections: string[]
   added_by: string
   created_at: string
+  last_active_at: string | null
 }
 
 interface RolePreset {
@@ -54,7 +55,8 @@ const SECTIONS = [
   { key: 'finance_finance', label: 'Finance Requests - Finance Review' },
   { key: 'attendance', label: 'Attendance & Leave' },
   { key: 'gamification', label: 'Gamification' },
-  { key: 'raffle', label: 'Raffle' }
+  { key: 'raffle', label: 'Raffle' },
+  { key: 'audit-log', label: 'Audit Log' }
 ]
 const ACTIONS: CrudAction[] = ['create', 'read', 'update', 'delete']
 
@@ -256,6 +258,21 @@ function summarisePermissions(perms: Record<string, Partial<SectionPermissions>>
 function sectionPermissionCount(section: string) {
   return ACTIONS.filter(a => permissionFor(section)[a]).length
 }
+
+function formatLastActive(iso: string | null): string {
+  if (!iso) return 'Never'
+  const d = new Date(iso)
+  const now = new Date()
+  const diff = now.getTime() - d.getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
 </script>
 
 <template>
@@ -373,6 +390,7 @@ function sectionPermissionCount(section: string) {
             <th class="text-left p-4">User</th>
             <th class="text-left p-4">Role</th>
             <th class="text-left p-4">Function</th>
+            <th class="text-left p-4">Last active</th>
             <th class="text-left p-4">Permissions</th>
             <th class="text-right p-4">Actions</th>
           </tr>
@@ -393,6 +411,7 @@ function sectionPermissionCount(section: string) {
               </span>
             </td>
             <td class="p-4 text-slate-600">{{ row.function || '-' }}</td>
+            <td class="p-4 text-xs text-slate-500 whitespace-nowrap">{{ formatLastActive(row.last_active_at) }}</td>
             <td class="p-4 text-slate-600 max-w-md text-xs leading-relaxed">
               <span v-if="row.role === 'super_admin'" class="text-amber-700 font-medium">All sections, full CRUD</span>
               <span v-else>{{ summarisePermissions(row.permissions) }}</span>
@@ -409,7 +428,7 @@ function sectionPermissionCount(section: string) {
             </td>
           </tr>
           <tr v-if="!admins.length">
-            <td colspan="5" class="p-10 text-center text-slate-500">No admins configured.</td>
+            <td colspan="6" class="p-10 text-center text-slate-500">No admins configured.</td>
           </tr>
         </tbody>
       </table>

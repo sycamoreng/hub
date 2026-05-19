@@ -1,8 +1,13 @@
 <script setup lang="ts">
 const sidebarOpen = ref(false)
 const route = useRoute()
-const { user, signOut } = useAuth()
+const { user, isAdmin, signOut } = useAuth()
+const { touchActive } = useAuditLog()
 watch(() => route.fullPath, () => { sidebarOpen.value = false })
+
+onMounted(() => {
+  if (isAdmin.value) touchActive()
+})
 
 async function handleSignOut() {
   await signOut()

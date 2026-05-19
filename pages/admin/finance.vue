@@ -10,28 +10,22 @@ const { user } = useAuth()
 
 const items = ref<any[]>([])
 const loading = ref(true)
-const filter = ref<'pending' | 'hc_approved' | 'approved' | 'rejected' | 'cancelled' | 'all'>('pending')
+const filter = ref<'pending' | 'hc_approved' | 'approved' | 'declined' | 'cancelled' | 'all'>('pending')
 
-const myPerms = ref<{ hc: boolean; finance: boolean }>({ hc: false, finance: false })
+const { adminRecord, isSuperAdmin } = useAuth()
 
-async function loadPerms() {
-  if (!user.value) return
-  const { data } = await supabase
-    .from('admin_users')
-    .select('role, permissions, is_active')
-    .eq('user_id', user.value.id)
-    .eq('is_active', true)
-    .maybeSingle()
-  const role = (data as any)?.role ?? ''
-  const perms = ((data as any)?.permissions as any) ?? {}
-  const isSuper = role === 'super_admin'
-  const hasUpdate = (key: string) => !!perms?.[key]?.update || !!perms?.[key]?.create
+const myPerms = computed(() => {
+  const rec = adminRecord.value
+  if (!rec) return { hc: false, finance: false }
+  if (isSuperAdmin.value) return { hc: true, finance: true }
+  const perms = rec.permissions ?? {}
+  const hasUpdate = (key: string) => !!perms[key]?.update || !!perms[key]?.create
   const payrollAccess = hasUpdate('payroll')
-  myPerms.value = {
-    hc: isSuper || hasUpdate('finance_hc') || payrollAccess,
-    finance: isSuper || hasUpdate('finance_finance') || payrollAccess
+  return {
+    hc: hasUpdate('finance_hc') || payrollAccess,
+    finance: hasUpdate('finance_finance') || payrollAccess
   }
-}
+})
 
 async function load() {
   loading.value = true
@@ -47,16 +41,15 @@ async function load() {
     loading.value = false
   }
 }
-loadPerms()
 load()
 watch(filter, load)
 
 type Stage = 'hc' | 'finance'
 const selected = ref<any | null>(null)
-const decision = ref({ stage: 'hc' as Stage, status: 'approved' as 'approved' | 'rejected', notes: '' })
+const decision = ref({ stage: 'hc' as Stage, status: 'approved' as 'approved' | 'declined', notes: '' })
 const saving = ref(false)
 
-function openDecide(row: any, stage: Stage, status: 'approved' | 'rejected') {
+function openDecide(row: any, stage: Stage, status: 'approved' | 'declined') {
   selected.value = row
   decision.value = { stage, status, notes: '' }
 }
@@ -68,22 +61,24 @@ async function decide() {
     const now = new Date().toISOString()
     const update: any = { decision_notes: decision.value.notes.trim() }
     if (decision.value.stage === 'hc') {
-      update.hc_status = decision.value.status
+      update.hc_status = decision.value.status === 'approved' ? 'approved' : 'declined'
       update.hc_reviewer_id = user.value.id
       update.hc_decided_at = now
       update.hc_notes = decision.value.notes.trim()
+      update.status = decision.value.status === 'approved' ? 'hc_approved' : 'declined'
     } else {
-      update.finance_status = decision.value.status
+      update.finance_status = decision.value.status === 'approved' ? 'approved' : 'declined'
       update.finance_reviewer_id = user.value.id
       update.finance_decided_at = now
       update.finance_notes = decision.value.notes.trim()
       update.decided_by = user.value.id
       update.decided_at = now
+      update.status = decision.value.status === 'approved' ? 'approved' : 'declined'
     }
     const { error } = await supabase.from('finance_requests').update(update).eq('id', selected.value.id)
     if (error) throw error
     const stageLabel = decision.value.stage === 'hc' ? 'HC review' : 'Finance review'
-    const verb = decision.value.status === 'approved' ? 'approved' : 'rejected'
+    const verb = decision.value.status === 'approved' ? 'approved' : 'declined'
     try {
       await supabase.from('notifications').insert({
         recipient_id: selected.value.requester_user_id,
@@ -115,7 +110,7 @@ async function decide() {
 function statusClass(s: string) {
   if (s === 'approved') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
   if (s === 'hc_approved') return 'bg-sky-50 text-sky-700 border-sky-200'
-  if (s === 'rejected') return 'bg-rose-50 text-rose-700 border-rose-200'
+  if (s === 'declined') return 'bg-rose-50 text-rose-700 border-rose-200'
   if (s === 'cancelled') return 'bg-slate-100 text-slate-600 border-slate-200'
   return 'bg-amber-50 text-amber-700 border-amber-200'
 }
@@ -124,7 +119,7 @@ function statusLabel(s: string) {
   if (s === 'pending') return 'Awaiting HC'
   if (s === 'hc_approved') return 'Awaiting Finance'
   if (s === 'approved') return 'Approved'
-  if (s === 'rejected') return 'Rejected'
+  if (s === 'declined') return 'Declined'
   if (s === 'cancelled') return 'Cancelled'
   return s
 }
@@ -138,7 +133,7 @@ function statusLabel(s: string) {
         <p class="text-sm text-slate-500 mt-1">Review salary advance and loan requests from staff.</p>
       </div>
       <div class="flex gap-1 bg-slate-100 rounded-lg p-1">
-        <button v-for="f in (['pending','hc_approved','approved','rejected','cancelled','all'] as const)" :key="f"
+        <button v-for="f in (['pending','hc_approved','approved','declined','cancelled','all'] as const)" :key="f"
           type="button" @click="filter = f"
           class="text-xs font-semibold px-3 py-1.5 rounded-md"
           :class="filter === f ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'">
@@ -185,11 +180,11 @@ function statusLabel(s: string) {
             <td class="px-5 py-3 text-right space-x-2 whitespace-nowrap">
               <template v-if="r.status === 'pending' && r.hc_status !== 'approved' && myPerms.hc">
                 <button type="button" @click="openDecide(r, 'hc', 'approved')" class="text-xs font-semibold px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700">HC approve</button>
-                <button type="button" @click="openDecide(r, 'hc', 'rejected')" class="text-xs font-semibold px-2.5 py-1 rounded bg-rose-600 text-white hover:bg-rose-700">HC reject</button>
+                <button type="button" @click="openDecide(r, 'hc', 'declined')" class="text-xs font-semibold px-2.5 py-1 rounded bg-rose-600 text-white hover:bg-rose-700">HC decline</button>
               </template>
-              <template v-else-if="(r.status === 'hc_approved' || (r.status === 'pending' && r.hc_status === 'approved')) && myPerms.finance">
+              <template v-else-if="r.status === 'hc_approved' && myPerms.finance">
                 <button type="button" @click="openDecide(r, 'finance', 'approved')" class="text-xs font-semibold px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700">Finance approve</button>
-                <button type="button" @click="openDecide(r, 'finance', 'rejected')" class="text-xs font-semibold px-2.5 py-1 rounded bg-rose-600 text-white hover:bg-rose-700">Finance reject</button>
+                <button type="button" @click="openDecide(r, 'finance', 'declined')" class="text-xs font-semibold px-2.5 py-1 rounded bg-rose-600 text-white hover:bg-rose-700">Finance decline</button>
               </template>
               <span v-else-if="r.decision_notes" class="text-xs text-slate-500" :title="r.decision_notes">Note</span>
             </td>
@@ -201,7 +196,7 @@ function statusLabel(s: string) {
     <div v-if="selected" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40" @click.self="selected = null">
       <div class="bg-white rounded-2xl max-w-md w-full shadow-xl">
         <header class="px-6 py-4 border-b border-slate-200">
-          <h3 class="text-base font-semibold text-slate-900">{{ decision.stage === 'hc' ? 'HC' : 'Finance' }} {{ decision.status === 'approved' ? 'approval' : 'rejection' }}</h3>
+          <h3 class="text-base font-semibold text-slate-900">{{ decision.stage === 'hc' ? 'HC' : 'Finance' }} {{ decision.status === 'approved' ? 'approval' : 'decline' }}</h3>
           <p class="text-xs text-slate-500 mt-1">{{ selected.staff?.full_name }} &middot; {{ formatNaira(selected.amount) }} &middot; {{ selected.repayment_months }} month(s)</p>
         </header>
         <div class="p-6 space-y-3">
@@ -215,7 +210,7 @@ function statusLabel(s: string) {
           <button type="button" @click="decide" :disabled="saving"
             class="text-sm font-semibold px-4 py-2 rounded-lg text-white"
             :class="decision.status === 'approved' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'">
-            {{ saving ? 'Saving...' : (decision.status === 'approved' ? 'Approve' : 'Reject') }}
+            {{ saving ? 'Saving...' : (decision.status === 'approved' ? 'Approve' : 'Decline') }}
           </button>
         </footer>
       </div>

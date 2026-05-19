@@ -14,6 +14,12 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function generateEmbedding(text: string): Promise<number[]> {
+  const model = new Supabase.ai.Session("gte-small");
+  const output = await model.run(text, { mean_pool: true, normalize: true });
+  return Array.from(output as Float32Array);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -21,11 +27,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const supabase = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
     const { data: userData, error: userErr } = await supabase.auth.getUser();
     if (userErr || !userData?.user) {
@@ -70,6 +78,31 @@ Deno.serve(async (req: Request) => {
       }, 503);
     }
 
+    // Service role client for vector search (bypasses RLS)
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
+
+    // --- RAG: Semantic search for relevant knowledge base chunks ---
+    let ragContext = "";
+    try {
+      const queryEmbedding = await generateEmbedding(message);
+      const { data: matchedChunks } = await serviceClient.rpc("match_kb_chunks", {
+        query_embedding: JSON.stringify(queryEmbedding),
+        match_count: 8,
+        min_similarity: 0.3,
+      });
+
+      if (matchedChunks && matchedChunks.length > 0) {
+        const ragParts = matchedChunks.map(
+          (c: { title: string; content: string; similarity: number }) =>
+            `[${c.title}] (relevance: ${(c.similarity * 100).toFixed(0)}%)\n${c.content}`
+        );
+        ragContext = ragParts.join("\n\n---\n\n");
+      }
+    } catch {
+      // RAG search failed, continue without it
+    }
+
+    // --- Structured knowledge from live tables (compact summary) ---
     const [products, tech, policies, benefits, contacts, comms, departments, locations, onboarding, leadership, company] = await Promise.all([
       supabase.from("products").select("name,tagline,description,category,status,target_market").eq("is_active", true),
       supabase.from("tech_stack").select("name,category,description,used_for").eq("is_active", true),
@@ -98,6 +131,7 @@ Deno.serve(async (req: Request) => {
       leadership: leadership.data,
     };
 
+    // --- Conversation history ---
     const { data: history } = await supabase
       .from("chat_messages")
       .select("role,content")
@@ -110,22 +144,32 @@ Deno.serve(async (req: Request) => {
       content: m.content,
     }));
 
-    const systemPrompt = [
+    // --- Build system prompt ---
+    const systemParts = [
       settings.system_prompt || "You are an internal assistant for Sycamore staff.",
       `Tone: ${settings.response_tone || "friendly and professional"}.`,
       settings.allowed_topics ? `You are allowed to discuss: ${settings.allowed_topics}.` : "",
       settings.blocked_topics ? `Refuse to discuss: ${settings.blocked_topics}. Politely redirect to relevant topics.` : "",
-      "Use ONLY the JSON knowledgebase below to answer. If the answer is not in the knowledgebase, say so.",
-      "Knowledgebase:",
+      "",
+      "You have two sources of knowledge:",
+      "",
+      "1. RELEVANT DOCUMENTS (retrieved by semantic search, most relevant to this query):",
+      ragContext || "(No matching documents found for this query)",
+      "",
+      "2. LIVE COMPANY DATA (structured information from the system):",
       JSON.stringify(kb),
-    ].filter(Boolean).join("\n\n");
+      "",
+      "Use both sources to answer. Prioritize document knowledge when it's relevant. If the answer is not in either source, say so.",
+    ].filter((s) => s !== undefined).join("\n");
 
+    // --- Store user message ---
     await supabase.from("chat_messages").insert({
       user_id: user.id,
       role: "user",
       content: message,
     });
 
+    // --- Call Claude ---
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -136,7 +180,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         model: "claude-haiku-4-5",
         max_tokens: 800,
-        system: systemPrompt,
+        system: systemParts,
         messages: [...recent, { role: "user", content: message }],
       }),
     });

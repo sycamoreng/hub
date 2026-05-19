@@ -9,6 +9,7 @@ const departments = ref<any[]>([])
 const locations = ref<any[]>([])
 const teams = ref<any[]>([])
 const managerCandidates = ref<any[]>([])
+const privateDataMap = ref<Record<string, string | null>>({})
 
 const editorOpen = ref(false)
 const editing = ref<any | null>(null)
@@ -16,9 +17,14 @@ const saving = ref(false)
 
 const fields = computed(() => [
   { key: 'full_name', label: 'Full name', required: true },
+  { key: 'staff_id', label: 'Staff ID', placeholder: 'e.g. SISL-2024-167' },
   { key: 'email', label: 'Email', type: 'email', required: true },
   { key: 'phone', label: 'Phone', type: 'tel' },
   { key: 'role', label: 'Role / title', required: true, placeholder: 'e.g. Senior Software Engineer' },
+  {
+    key: 'gender', label: 'Gender', type: 'select',
+    options: [{ value: '', label: 'Not set' }, { value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]
+  },
   {
     key: 'department_id', label: 'Department', type: 'select',
     options: [{ value: '', label: 'None' }, ...departments.value.map(d => ({ value: d.id, label: d.name }))]
@@ -40,6 +46,7 @@ const fields = computed(() => [
       .map(m => ({ value: m.id, label: `${m.full_name}${m.role ? ' — ' + m.role : ''}` }))]
   },
   { key: 'joined_date', label: 'Joined date', type: 'date' },
+  { key: 'date_of_birth', label: 'Date of birth', type: 'date' },
   { key: 'bio', label: 'Bio', type: 'textarea' },
   { key: 'is_active', label: 'Active', type: 'checkbox', placeholder: 'Currently employed' },
   { key: 'directory_visible', label: 'Show in directory', type: 'checkbox', placeholder: 'Visible to staff in the directory and organogram' },
@@ -48,6 +55,7 @@ const fields = computed(() => [
 
 const columns = [
   { key: 'full_name', label: 'Name' },
+  { key: 'staff_id', label: 'Staff ID', render: (r: any) => r.staff_id || '—' },
   { key: 'role', label: 'Role' },
   { key: 'email', label: 'Email' },
   { key: 'auth_user_id', label: 'Profile', render: (r: any) => r.auth_user_id ? 'Claimed' : 'Pending' },
@@ -78,15 +86,27 @@ const statusCounts = computed(() => {
   return { all, active, inactive, exited }
 })
 
+async function loadPrivateData() {
+  const { data } = await supabase.from('staff_private_data').select('id, date_of_birth')
+  const map: Record<string, string | null> = {}
+  if (data) {
+    for (const row of data) {
+      map[row.id] = row.date_of_birth
+    }
+  }
+  privateDataMap.value = map
+}
+
 await Promise.all([
   load([{ column: 'full_name', ascending: true }]),
+  loadPrivateData(),
   (async () => { const { data } = await supabase.from('departments').select('id, name').order('name'); departments.value = data ?? [] })(),
   (async () => { const { data } = await supabase.from('locations').select('id, name, city').order('name'); locations.value = data ?? [] })(),
   (async () => { const { data } = await supabase.from('teams').select('id, name, department_id').order('name'); teams.value = data ?? [] })(),
   (async () => { const { data } = await supabase.from('staff_members').select('id, full_name, role, is_active').eq('is_active', true).order('full_name'); managerCandidates.value = data ?? [] })()
 ])
 
-function openNew() { editing.value = { is_active: true, directory_visible: true }; editorOpen.value = true }
+function openNew() { editing.value = { is_active: true, directory_visible: true, staff_id: '', date_of_birth: '', gender: '' }; editorOpen.value = true }
 function openEdit(row: any) {
   editing.value = {
     ...row,
@@ -96,6 +116,9 @@ function openEdit(row: any) {
     manager_id: row.manager_id ?? '',
     joined_date: row.joined_date ?? '',
     exited_at: row.exited_at ?? '',
+    staff_id: row.staff_id ?? '',
+    gender: row.gender ?? '',
+    date_of_birth: privateDataMap.value[row.id] ?? '',
     directory_visible: row.directory_visible !== false
   }
   editorOpen.value = true
@@ -112,7 +135,9 @@ async function save(payload: Record<string, any>) {
       team_id: payload.team_id || null, manager_id: payload.manager_id || null,
       joined_date: payload.joined_date || null, bio: payload.bio ?? '', is_active: !!payload.is_active,
       directory_visible: payload.directory_visible !== false,
-      exited_at: payload.exited_at || null
+      exited_at: payload.exited_at || null,
+      staff_id: payload.staff_id?.trim() || null,
+      gender: payload.gender || null
     }
     let staffId = editing.value?.id
     if (staffId) {
@@ -122,6 +147,14 @@ async function save(payload: Record<string, any>) {
       staffId = created?.id
     }
     if (staffId) {
+      // Save DOB in the private table
+      const dob = payload.date_of_birth || null
+      await supabase.from('staff_private_data').upsert(
+        { id: staffId, date_of_birth: dob, updated_at: new Date().toISOString() },
+        { onConflict: 'id' }
+      )
+      privateDataMap.value[staffId] = dob
+
       const prev = editing.value?.id ? editing.value : {}
       const changed: string[] = []
       for (const f of SYNCED_FIELDS) {
