@@ -14,7 +14,7 @@ const profilesByUid = ref<Record<string, UserProfile>>({})
 const search = ref('')
 const selectedDept = ref('All')
 const loading = ref(true)
-const view = ref<'active' | 'exited'>('active')
+const view = ref<'active' | 'new_hires' | 'exited'>('active')
 
 async function load() {
   loading.value = true
@@ -41,6 +41,25 @@ watch([() => user.value?.id, () => profileSyncTick.value], () => load())
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
   return staff.value.filter(s => {
+    const deptOk = selectedDept.value === 'All' || s.departments?.name === selectedDept.value
+    if (!deptOk) return false
+    if (!q) return true
+    return s.full_name.toLowerCase().includes(q) || s.role.toLowerCase().includes(q) || s.email.toLowerCase().includes(q)
+  })
+})
+
+const newHires = computed(() => {
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - 90)
+  const cutoffStr = cutoff.toISOString().split('T')[0]
+  return staff.value
+    .filter(s => s.joined_date && s.joined_date >= cutoffStr)
+    .sort((a, b) => (b.joined_date || '').localeCompare(a.joined_date || ''))
+})
+
+const filteredNewHires = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return newHires.value.filter(s => {
     const deptOk = selectedDept.value === 'All' || s.departments?.name === selectedDept.value
     if (!deptOk) return false
     if (!q) return true
@@ -87,6 +106,11 @@ function avatar(s: any): string | null {
         class="text-xs font-semibold px-3 py-1.5 rounded-md"
         :class="view === 'active' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'">
         Active <span class="ml-1 text-slate-400">{{ staff.length }}</span>
+      </button>
+      <button type="button" @click="view = 'new_hires'"
+        class="text-xs font-semibold px-3 py-1.5 rounded-md"
+        :class="view === 'new_hires' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'">
+        New Hires <span class="ml-1 text-slate-400">{{ newHires.length }}</span>
       </button>
       <button type="button" @click="view = 'exited'"
         class="text-xs font-semibold px-3 py-1.5 rounded-md"
@@ -142,6 +166,35 @@ function avatar(s: any): string | null {
         </div>
       </NuxtLink>
     </div>
+    </template>
+
+    <template v-else-if="view === 'new_hires'">
+      <div v-if="filteredNewHires.length === 0" class="text-slate-400">No new hires in the last 90 days.</div>
+      <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <NuxtLink v-for="s in filteredNewHires" :key="s.id" :to="`/profile/${s.id}`" class="card card-hover p-5 flex gap-4 relative overflow-hidden">
+          <div class="absolute top-0 right-0 bg-sycamore-100 text-sycamore-700 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-bl-lg">New</div>
+          <div class="relative flex-shrink-0">
+            <img
+              v-if="avatar(s)"
+              :src="avatar(s)!"
+              :alt="s.full_name"
+              referrerpolicy="no-referrer"
+              class="w-14 h-14 rounded-full object-cover border border-slate-200"
+            />
+            <div v-else class="w-14 h-14 rounded-full bg-gradient-to-br from-sycamore-400 to-sycamore-700 text-white flex items-center justify-center font-bold text-lg">
+              {{ initials(s.full_name) }}
+            </div>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h3 class="font-semibold text-slate-900 truncate">{{ s.full_name }}</h3>
+            <div class="text-sm text-slate-600 truncate">{{ s.role }}</div>
+            <div class="text-xs text-slate-500 mt-1">
+              <span v-if="s.departments?.name" class="badge badge-green">{{ s.departments.name }}</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-2">Joined {{ fmtDate(s.joined_date) }}</div>
+          </div>
+        </NuxtLink>
+      </div>
     </template>
 
     <template v-else>

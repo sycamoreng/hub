@@ -33,6 +33,7 @@ const standalone = computed<NavItem[]>(() => {
 const rewardsGroup = computed<NavGroup>(() => {
   const items: NavItem[] = [
     { to: '/recognition', label: 'Recognition', icon: 'star' },
+    { to: '/guess-who', label: 'Guess Who', icon: 'sparkle' },
     { to: '/wordle', label: 'Daily Wordle', icon: 'sparkle' },
     { to: '/typing', label: 'Typing Sprint', icon: 'sparkle' },
     { to: '/dino', label: 'Sycamore Run', icon: 'sparkle' }
@@ -60,7 +61,8 @@ const baseGroups = computed<NavGroup[]>(() => [
       { to: '/my-team', label: 'My Team', icon: 'users' },
       { to: '/departments', label: 'Departments', icon: 'building' },
       { to: '/locations', label: 'Locations', icon: 'map' },
-      { to: '/staff', label: 'Staff Directory', icon: 'users' }
+      { to: '/staff', label: 'Staff Directory', icon: 'users' },
+      { to: '/celebrations', label: 'Celebrations', icon: 'sparkle' }
     ]
   },
   {

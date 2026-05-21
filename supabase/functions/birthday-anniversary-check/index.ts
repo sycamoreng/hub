@@ -160,9 +160,9 @@ Deno.serve(async (req: Request) => {
       .select("id, full_name, auth_user_id")
       .eq("is_active", true);
 
-    const results = { birthdays: 0, anniversaries: 0, notifications: 0 };
+    const results = { birthdays: 0, anniversaries: 0, notifications: 0, posts: 0 };
 
-    // --- Send birthday notifications ---
+    // --- Send birthday notifications and create posts ---
     for (const person of birthdayPeople) {
       const firstName = person.full_name.split(/\s+/)[0] || person.full_name;
 
@@ -187,7 +187,21 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Create in-app notifications for everyone (so they know it's someone's birthday)
+      // Create automated birthday post in the feed
+      if (person.auth_user_id) {
+        const postContent = `Happy Birthday, ${person.full_name}! Wishing you an amazing day and a wonderful year ahead. Drop a comment or reaction to celebrate with ${firstName}!`;
+        const { error: postErr } = await supabase.from("posts").insert({
+          author_id: person.auth_user_id,
+          content: postContent,
+          post_kind: "birthday",
+          post_type: "celebration",
+          template_data: { name: person.full_name, staff_id: person.id, auto: true },
+          is_published: true,
+        });
+        if (!postErr) results.posts++;
+      }
+
+      // Create in-app notifications for everyone
       if (allActiveStaff) {
         const notifications = allActiveStaff
           .filter((s) => s.auth_user_id && s.id !== person.id)
@@ -209,7 +223,7 @@ Deno.serve(async (req: Request) => {
       results.birthdays++;
     }
 
-    // --- Send anniversary notifications ---
+    // --- Send anniversary notifications and create posts ---
     for (const person of anniversaryPeople) {
       const firstName = person.full_name.split(/\s+/)[0] || person.full_name;
       const yearLabel = person.years === 1 ? "1 year" : `${person.years} years`;
@@ -235,6 +249,20 @@ Deno.serve(async (req: Request) => {
         } catch {
           // non-fatal
         }
+      }
+
+      // Create automated anniversary post in the feed
+      if (person.auth_user_id) {
+        const postContent = `Congratulations to ${person.full_name} on ${yearLabel} at Sycamore! Thank you for your dedication and contributions. Drop a comment or reaction to celebrate with ${firstName}!`;
+        const { error: postErr } = await supabase.from("posts").insert({
+          author_id: person.auth_user_id,
+          content: postContent,
+          post_kind: "anniversary",
+          post_type: "celebration",
+          template_data: { name: person.full_name, years: person.years, staff_id: person.id, auto: true },
+          is_published: true,
+        });
+        if (!postErr) results.posts++;
       }
 
       // In-app notifications
@@ -264,6 +292,7 @@ Deno.serve(async (req: Request) => {
       birthdays: results.birthdays,
       anniversaries: results.anniversaries,
       notifications_sent: results.notifications,
+      posts_created: results.posts,
     });
   } catch (e) {
     return json({ error: (e as Error).message ?? "Unexpected error" }, 500);

@@ -277,6 +277,18 @@ export function useGamification() {
       const { count } = await supabase.from('spark_responses').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_correct', true)
       return count ?? 0
     }
+    if (metric === 'guess_who_correct_count') {
+      const { count } = await supabase.from('guess_who_attempts').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('won', true)
+      return count ?? 0
+    }
+    if (metric === 'wordle_win_count') {
+      const { count } = await supabase.from('points_events').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('event_kind', 'wordle_win')
+      return count ?? 0
+    }
+    if (metric === 'typing_60wpm_count') {
+      const { count } = await supabase.from('typing_runs').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('wpm', 60)
+      return count ?? 0
+    }
     return 0
   }
 
