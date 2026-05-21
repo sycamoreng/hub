@@ -4,6 +4,7 @@ import { useSupabase } from '~/utils/supabase'
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const settings = ref<any>(null)
 const loading = ref(true)
@@ -76,6 +77,7 @@ async function save() {
       const { data } = await supabase.from('email_settings').insert(payload).select().maybeSingle()
       settings.value = data
     }
+    auditLog({ action: 'update', target_type: 'email_settings', target_label: 'Email settings' })
     toast.success('Saved')
   } catch (e: any) {
     toast.error(e.message ?? 'Failed to save')
@@ -104,6 +106,7 @@ async function sendTest() {
   testing.value = true
   try {
     await callFn('test_send', { to: testTo.value })
+    auditLog({ action: 'test_send', target_type: 'email', target_label: testTo.value })
     toast.success('Test email sent')
     await load()
   } catch (e: any) {
@@ -117,6 +120,7 @@ async function runQueue() {
   running.value = true
   try {
     const out = await callFn('run_queue')
+    auditLog({ action: 'run_queue', target_type: 'email', target_label: `Processed ${out.processed ?? 0}` })
     toast.success(`Processed ${out.processed ?? 0}: ${out.sent ?? 0} sent, ${out.failed ?? 0} failed.`)
     await load()
   } catch (e: any) {

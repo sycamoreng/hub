@@ -11,6 +11,7 @@ import {
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const { canPerform } = useAuth()
 const {
   loadAppointments,
@@ -72,6 +73,7 @@ async function act(a: Appointment, to: AppointmentStatus) {
     if (to === 'checked_in') patch.checked_in_at = new Date().toISOString()
     if (to === 'checked_out') patch.checked_out_at = new Date().toISOString()
     await changeStatus(a.id, a.status, to, patch)
+    auditLog({ action: `appointment_${to}`, target_type: 'appointment', target_id: a.id, target_label: a.guest_name })
     toast.success('Updated')
     await loadAll()
   } catch (e: any) {
@@ -89,6 +91,7 @@ async function removeAppt(a: Appointment) {
   })
   if (!ok) return
   await deleteAppointment(a.id)
+  auditLog({ action: 'delete', target_type: 'appointment', target_id: a.id, target_label: a.guest_name })
   toast.success('Deleted')
   await loadAll()
 }
@@ -96,6 +99,7 @@ async function removeAppt(a: Appointment) {
 async function saveNote(a: Appointment, note: string) {
   try {
     await updateAppointment(a.id, { notes: note }, 'Admin updated notes')
+    auditLog({ action: 'update_notes', target_type: 'appointment', target_id: a.id, target_label: a.guest_name })
     toast.success('Saved')
   } catch (e: any) {
     toast.error(e?.message ?? 'Could not save')
@@ -107,6 +111,7 @@ async function addFd() {
   if (!canPerform('appointments', 'create')) { toast.error('No permission'); return }
   try {
     await addFrontDesk(addStaffId.value, addLocationId.value || null)
+    auditLog({ action: 'add_front_desk', target_type: 'front_desk', target_label: staff.value.find(s => s.id === addStaffId.value)?.full_name ?? addStaffId.value })
     toast.success('Front desk added')
     addStaffId.value = ''
     addLocationId.value = ''
@@ -126,6 +131,7 @@ async function removeFd(row: any) {
   })
   if (!ok) return
   await removeFrontDesk(row.id)
+  auditLog({ action: 'remove_front_desk', target_type: 'front_desk', target_id: row.id, target_label: row.staff?.full_name ?? '' })
   toast.success('Removed')
   frontDesk.value = await loadFrontDesk()
 }

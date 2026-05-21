@@ -14,6 +14,7 @@ const props = defineProps<{
 }>()
 
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const {
   loadAppraisals, saveAppraisal, deleteAppraisal,
   recomputeAppraisal, reassignAppraiser,
@@ -83,6 +84,7 @@ async function ensureAppraisalsForCycle() {
         status: 'not_started'
       })
     }
+    auditLog({ action: 'generate', target_type: 'appraisal', target_label: `${missing.length} appraisals for cycle` })
     toast.success(`Generated ${missing.length} appraisal(s).`)
     await reload()
   } catch (e: any) {
@@ -96,6 +98,7 @@ async function recompute(a: any) {
   recomputing.value[a.id] = true
   try {
     await recomputeAppraisal(a.id)
+    auditLog({ action: 'recompute', target_type: 'appraisal', target_id: a.id, target_label: a.subject?.full_name })
     await reload()
     toast.success('Score recomputed')
   } catch (e: any) {
@@ -125,6 +128,7 @@ async function onReassign(a: any, newStaffId: string) {
   reassigning.value[a.id] = true
   try {
     await reassignAppraiser(a.id, newStaffId || null)
+    auditLog({ action: 'reassign_appraiser', target_type: 'appraisal', target_id: a.id, target_label: a.subject?.full_name })
     toast.success('Appraiser reassigned')
     await reload()
   } catch (e: any) {
@@ -164,6 +168,7 @@ async function saveEdit() {
     if (payload.status === 'finalized') payload.finalized_at = new Date().toISOString()
     await saveAppraisal(payload)
     await recomputeAppraisal(editing.value.id)
+    auditLog({ action: 'update', target_type: 'appraisal', target_id: editing.value.id, target_label: `Status: ${editing.value.status}` })
     toast.success('Appraisal saved')
     editing.value = null
     await reload()
@@ -176,6 +181,7 @@ async function remove(a: any) {
   if (!confirm(`Delete the appraisal for ${a.subject?.full_name ?? 'this staff member'}?`)) return
   try {
     await deleteAppraisal(a.id)
+    auditLog({ action: 'delete', target_type: 'appraisal', target_id: a.id, target_label: a.subject?.full_name })
     await reload()
     toast.success('Appraisal removed')
   } catch (e: any) {
@@ -187,6 +193,7 @@ async function resetRow(a: any) {
   if (!confirm(`Reset the appraisal for ${a.subject?.full_name ?? 'this staff member'}? Scores, notes and submission timestamps will be cleared, and any open reviews will be reopened.`)) return
   try {
     await resetAppraisal(a.id)
+    auditLog({ action: 'reset', target_type: 'appraisal', target_id: a.id, target_label: a.subject?.full_name })
     toast.success('Appraisal reset')
     await reload()
   } catch (e: any) {
@@ -204,6 +211,7 @@ async function confirmExemptOne() {
   if (!exemptingOne.value) return
   try {
     await exemptAppraisal(exemptingOne.value.id, exemptOneReason.value)
+    auditLog({ action: 'exempt', target_type: 'appraisal', target_id: exemptingOne.value.id, target_label: exemptingOne.value.subject?.full_name })
     toast.success('Appraisal marked exempt')
     showExemptOne.value = false
     exemptingOne.value = null
@@ -240,6 +248,7 @@ async function runBulkExempt() {
   try {
     const ids = Array.from(selectedIds.value)
     const count = await bulkExemptAppraisals(ids, bulkExemptReason.value)
+    auditLog({ action: 'bulk_exempt', target_type: 'appraisal', target_label: `${count} appraisals` })
     toast.success(`Exempted ${count} appraisal${count === 1 ? '' : 's'}`)
     showBulkExempt.value = false
     bulkExemptReason.value = ''
@@ -308,6 +317,7 @@ async function reinstate(a: any) {
   if (!confirm(`Reinstate ${a.subject?.full_name ?? 'this staff member'} into this appraisal cycle?`)) return
   try {
     await saveAppraisal({ id: a.id, status: 'not_started', notes: '' })
+    auditLog({ action: 'reinstate', target_type: 'appraisal', target_id: a.id, target_label: a.subject?.full_name })
     toast.success('Appraisal reinstated')
     await reload()
   } catch (e: any) {

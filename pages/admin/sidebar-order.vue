@@ -4,6 +4,7 @@ definePageMeta({ layout: 'admin' })
 const { isAdmin, ready } = useAuth()
 const { order, load, save } = useSidebarOrder()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const GROUP_META: Record<string, { label: string; icon: string; description: string }> = {
   company: { label: 'Company', icon: 'building', description: 'Leadership, Departments, Locations, Staff Directory' },
@@ -70,6 +71,7 @@ async function submit() {
   saving.value = true
   try {
     await save(draft.value)
+    auditLog({ action: 'update', target_type: 'sidebar_order', target_label: 'Sidebar reorder' })
     toast.success('Sidebar order saved')
   } catch (e: any) {
     toast.error(e?.message || 'Failed to save sidebar order')

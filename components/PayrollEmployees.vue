@@ -5,6 +5,7 @@ import { formatNaira } from '~/composables/usePayroll'
 const supabase = useSupabase()
 const { items, loading, load, create, update, remove } = useCrud('payroll_employees')
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const staff = ref<any[]>([])
 
 const editorOpen = ref(false)
@@ -90,6 +91,7 @@ async function save(payload: Record<string, any>) {
     }
     if (editing.value?.id) await update(editing.value.id, { ...data, updated_at: new Date().toISOString() })
     else await create(data)
+    auditLog({ action: editing.value?.id ? 'update' : 'create', target_type: 'payroll_employee', target_label: data.full_name })
     editorOpen.value = false
     toast.success('Saved')
   } catch (e: any) { toast.error(e.message ?? 'Failed to save') }
@@ -99,7 +101,11 @@ async function save(payload: Record<string, any>) {
 async function del(row: any) {
   const ok = await toast.confirm({ title: 'Remove from payroll', message: `Remove "${row.full_name}" from payroll?`, variant: 'danger', confirmLabel: 'Remove' })
   if (!ok) return
-  try { await remove(row.id); toast.success('Removed') } catch (e: any) { toast.error(e.message ?? 'Failed to remove') }
+  try {
+    await remove(row.id)
+    auditLog({ action: 'delete', target_type: 'payroll_employee', target_id: row.id, target_label: row.full_name })
+    toast.success('Removed')
+  } catch (e: any) { toast.error(e.message ?? 'Failed to remove') }
 }
 </script>
 

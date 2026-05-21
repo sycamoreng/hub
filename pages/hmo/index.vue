@@ -2,22 +2,30 @@
 import { useSupabase } from '~/utils/supabase'
 
 const supabase = useSupabase()
-const { profile } = useAuth()
+const { user, profile } = useAuth()
 
 const enrollment = ref<any | null>(null)
 const provider = ref<any | null>(null)
+const staffName = ref('')
 const loading = ref(true)
 const copied = ref(false)
 
 async function load() {
   loading.value = true
   try {
-    const staffId = profile.value?.id
-    if (!staffId) { enrollment.value = null; return }
+    const uid = user.value?.id
+    if (!uid) { enrollment.value = null; return }
+    const { data: staff } = await supabase
+      .from('staff_members')
+      .select('id, full_name')
+      .eq('auth_user_id', uid)
+      .maybeSingle()
+    if (!staff) { enrollment.value = null; return }
+    staffName.value = staff.full_name || ''
     const { data } = await supabase
       .from('staff_hmo_enrollments')
       .select('*, provider:hmo_providers(id, name, logo_url, website, contact_email, contact_phone, document_url, directory_url, coverage_summary, description)')
-      .eq('staff_id', staffId)
+      .eq('staff_id', staff.id)
       .maybeSingle()
     enrollment.value = data ?? null
     provider.value = data?.provider ?? null
@@ -26,7 +34,7 @@ async function load() {
   }
 }
 
-watch(() => profile.value?.id, () => { load() }, { immediate: true })
+watch(() => user.value?.id, () => { load() }, { immediate: true })
 
 function formatDate(d: string | null | undefined) {
   if (!d) return ''
@@ -90,9 +98,9 @@ async function copyEnrollee() {
             <div class="text-[11px] uppercase tracking-wider text-white/60 font-semibold mb-1">Cover from</div>
             <div class="text-sm">{{ formatDate(enrollment.effective_date) }}</div>
           </div>
-          <div v-if="profile?.full_name">
+          <div v-if="staffName">
             <div class="text-[11px] uppercase tracking-wider text-white/60 font-semibold mb-1">Member</div>
-            <div class="text-sm">{{ profile.full_name }}</div>
+            <div class="text-sm">{{ staffName }}</div>
           </div>
         </div>
 

@@ -3,6 +3,7 @@ definePageMeta({ layout: 'admin', middleware: ['auth'] })
 
 const { items, loading, load, create, update, remove } = useCrud('onboarding_steps')
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const editorOpen = ref(false)
 const editing = ref<any | null>(null)
 const saving = ref(false)
@@ -90,6 +91,7 @@ async function save(payload: Record<string, any>) {
     }
     if (editing.value?.id) await update(editing.value.id, data); else await create(data)
     editorOpen.value = false
+    auditLog({ action: editing.value?.id ? 'update' : 'create', target_type: 'onboarding_step', target_label: data.title })
     toast.success('Saved')
   } catch (e: any) { toast.error(e.message ?? 'Failed to save') }
   finally { saving.value = false }
@@ -98,7 +100,9 @@ async function save(payload: Record<string, any>) {
 async function del(row: any) {
   const ok = await toast.confirm({ title: 'Delete', message: `Delete "${row.title}"?` + ' This cannot be undone.', variant: 'danger', confirmLabel: 'Delete' })
   if (!ok) return
-  try { await remove(row.id); toast.success('Deleted') } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
+  try { await remove(row.id)
+    auditLog({ action: 'delete', target_type: 'onboarding_step', target_id: row.id, target_label: row.title })
+    toast.success('Deleted') } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
 }
 </script>
 

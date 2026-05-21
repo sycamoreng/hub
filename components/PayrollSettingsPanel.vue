@@ -3,6 +3,7 @@ import { useSupabase } from '~/utils/supabase'
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const loading = ref(true)
 const saving = ref(false)
 const s = ref<any>({})
@@ -33,6 +34,7 @@ async function save() {
     }
     const { error } = await supabase.from('payroll_settings').update(payload).eq('id', 1)
     if (error) throw error
+    auditLog({ action: 'update', target_type: 'payroll_settings', target_label: 'Payroll settings' })
     toast.success('Settings saved')
   } catch (e: any) { toast.error(e.message ?? 'Failed to save') }
   finally { saving.value = false }

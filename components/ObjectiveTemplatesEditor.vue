@@ -16,6 +16,7 @@ const props = defineProps<{
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const { loadObjectiveTemplates, saveObjectiveTemplate, deleteObjectiveTemplate } = usePerformance()
 
 const templates = ref<any[]>([])
@@ -76,6 +77,7 @@ async function save() {
     }
     if (payload.scope === 'company') payload.department_id = null
     await saveObjectiveTemplate(payload)
+    auditLog({ action: payload.id ? 'update' : 'create', target_type: 'objective_template', target_label: payload.title })
     toast.success('Template saved')
     editing.value = null
     await reload()
@@ -88,6 +90,7 @@ async function remove(t: any) {
   if (!confirm(`Delete "${t.title}"?`)) return
   try {
     await deleteObjectiveTemplate(t.id)
+    auditLog({ action: 'delete', target_type: 'objective_template', target_id: t.id, target_label: t.title })
     await reload()
     toast.success('Template removed')
   } catch (e: any) {

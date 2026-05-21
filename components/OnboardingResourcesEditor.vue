@@ -17,6 +17,7 @@ const emit = defineEmits<{ (e: 'close'): void }>()
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const items = ref<Resource[]>([])
 const loading = ref(false)
 const form = ref<Resource>(blank())
@@ -78,10 +79,12 @@ async function save() {
     if (editingId.value) {
       const { error } = await supabase.from('onboarding_resources').update(payload).eq('id', editingId.value)
       if (error) throw error
+      auditLog({ action: 'update', target_type: 'onboarding_resource', target_label: payload.title })
       toast.success('Resource updated')
     } else {
       const { error } = await supabase.from('onboarding_resources').insert(payload)
       if (error) throw error
+      auditLog({ action: 'create', target_type: 'onboarding_resource', target_label: payload.title })
       toast.success('Resource added')
     }
     reset()
@@ -98,6 +101,7 @@ async function del(r: Resource) {
   try {
     const { error } = await supabase.from('onboarding_resources').delete().eq('id', r.id)
     if (error) throw error
+    auditLog({ action: 'delete', target_type: 'onboarding_resource', target_id: r.id, target_label: r.title })
     toast.success('Removed')
     await load()
   } catch (e: any) {

@@ -7,6 +7,7 @@ import { emailUserNotification } from '~/composables/useNotifications'
 const supabase = useSupabase()
 const toast = useToast()
 const { user } = useAuth()
+const { log: auditLog } = useAuditLog()
 
 const items = ref<any[]>([])
 const loading = ref(true)
@@ -97,6 +98,12 @@ async function decide() {
         trigger: 'finance_decision'
       })
     } catch { /* non-fatal */ }
+    auditLog({
+      action: `${decision.value.stage}_${decision.value.status === 'approved' ? 'approve' : 'decline'}`,
+      target_type: 'finance_request',
+      target_id: selected.value.id,
+      target_label: `${selected.value.type} - ${formatNaira(selected.value.amount)}`
+    })
     toast.success('Decision saved')
     selected.value = null
     await load()

@@ -4,6 +4,7 @@ import { computePayroll, formatNaira, MONTH_NAMES } from '~/composables/usePayro
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const runs = ref<any[]>([])
 const loading = ref(false)
@@ -113,6 +114,7 @@ async function createRun() {
       updated_at: new Date().toISOString()
     }).eq('id', run!.id)
 
+    auditLog({ action: 'create', target_type: 'payroll_run', target_id: run!.id, target_label: newRun.value.label || `${MONTH_NAMES[newRun.value.period_month - 1]} ${newRun.value.period_year}` })
     toast.success(`Created run for ${MONTH_NAMES[newRun.value.period_month - 1]} with ${employees.length} employees`)
     newRun.value.label = ''
     newRun.value.pay_date = ''
@@ -142,6 +144,7 @@ async function approve(run: any) {
       status: 'approved', approved_at: new Date().toISOString(), approved_by: user.user?.id
     }).eq('id', run.id)
     if (error) throw error
+    auditLog({ action: 'approve', target_type: 'payroll_run', target_id: run.id, target_label: run.label })
     toast.success('Approved')
     await loadRuns()
     if (selectedRun.value?.id === run.id) selectedRun.value = { ...run, status: 'approved' }
@@ -152,6 +155,7 @@ async function markPaid(run: any) {
   try {
     const { error } = await supabase.from('payroll_runs').update({ status: 'paid' }).eq('id', run.id)
     if (error) throw error
+    auditLog({ action: 'mark_paid', target_type: 'payroll_run', target_id: run.id, target_label: run.label })
     toast.success('Marked as paid')
     await loadRuns()
     if (selectedRun.value?.id === run.id) selectedRun.value = { ...run, status: 'paid' }
@@ -164,6 +168,7 @@ async function deleteRun(run: any) {
   try {
     const { error } = await supabase.from('payroll_runs').delete().eq('id', run.id)
     if (error) throw error
+    auditLog({ action: 'delete', target_type: 'payroll_run', target_id: run.id, target_label: run.label })
     toast.success('Deleted')
     if (selectedRun.value?.id === run.id) selectedRun.value = null
     await loadRuns()

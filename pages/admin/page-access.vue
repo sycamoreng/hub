@@ -4,6 +4,7 @@ definePageMeta({ layout: 'admin', middleware: ['auth'] })
 const { isSuperAdmin } = useAuth()
 const { load, setLock, isLocked } = usePageLocks()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 interface PageEntry { path: string; label: string; group: string }
 
@@ -59,7 +60,9 @@ async function toggle(entry: PageEntry) {
   if (!isSuperAdmin.value) return
   busy.value = entry.path
   try {
-    await setLock(entry.path, !isLocked(entry.path))
+    const newState = !isLocked(entry.path)
+    await setLock(entry.path, newState)
+    auditLog({ action: newState ? 'lock_page' : 'unlock_page', target_type: 'page_access', target_label: entry.label })
     toast.push({ type: 'success', title: isLocked(entry.path) ? 'Page locked' : 'Page unlocked', message: entry.label })
   } catch (e: any) {
     toast.push({ type: 'error', title: 'Could not update', message: e?.message ?? 'Unexpected error' })

@@ -11,6 +11,7 @@ interface DeptMapRow { google_value: string; department_id: string | null }
 const supabase = useSupabase()
 const toast = useToast()
 const { isSuperAdmin } = useAuth()
+const { log: auditLog } = useAuditLog()
 
 const activeTab = ref<'overview'|'users'|'departments'|'settings'>('overview')
 
@@ -96,6 +97,7 @@ async function setRule(email: string, action: 'include'|'exclude') {
       .upsert({ email: em, action }, { onConflict: 'email' })
     if (error) throw error
     rules.value = new Map(rules.value.set(em, { email: em, action, note: rules.value.get(em)?.note ?? '' }))
+    auditLog({ action: `set_rule_${action}`, target_type: 'google_sync_rule', target_label: em })
   } catch (e: any) {
     toast.error(e.message)
   }
@@ -106,6 +108,7 @@ async function clearRule(email: string) {
   try {
     const { error } = await supabase.from('google_sync_rules').delete().eq('email', em)
     if (error) throw error
+    auditLog({ action: 'clear_rule', target_type: 'google_sync_rule', target_label: em })
     const next = new Map(rules.value); next.delete(em); rules.value = next
   } catch (e: any) {
     toast.error(e.message)
@@ -179,6 +182,7 @@ async function excludeFromDirectory(staff: { id: string; email: string; full_nam
     if (staffErr) throw staffErr
     rules.value = new Map(rules.value.set(em, { email: em, action: 'exclude', note: rules.value.get(em)?.note ?? '' }))
     staffRecords.value = staffRecords.value.map(s => s.id === staff.id ? { ...s, is_active: false } : s)
+    auditLog({ action: 'exclude_from_directory', target_type: 'staff_member', target_id: staff.id, target_label: staff.full_name || staff.email })
     toast.success(`${staff.full_name || staff.email} excluded`)
   } catch (e: any) {
     toast.error(e.message)
@@ -240,6 +244,7 @@ async function setDeptMap(google_value: string, department_id: string | null) {
     } else {
       await supabase.from('google_department_map').upsert({ google_value, department_id }, { onConflict: 'google_value' })
     }
+    auditLog({ action: department_id ? 'map_department' : 'unmap_department', target_type: 'google_department_map', target_label: google_value })
     await loadDeptMap()
   } catch (e: any) {
     toast.error(e.message)
@@ -252,6 +257,7 @@ async function saveSettings(patch: Partial<SettingsRow>) {
     const { error } = await supabase.from('google_sync_settings').update(patch).eq('id', 'default')
     if (error) throw error
     settings.value = { ...(settings.value as SettingsRow), ...patch }
+    auditLog({ action: 'update', target_type: 'google_sync_settings', target_label: 'Google sync settings' })
     toast.success('Settings saved')
   } catch (e: any) {
     toast.error(e.message)
@@ -284,6 +290,7 @@ async function runApply() {
   running.value = true
   try {
     const res = await callFn('apply', 'POST')
+    auditLog({ action: 'sync_apply', target_type: 'google_sync', details: res.counters })
     toast.success(`Sync complete: +${res.counters.added}, ~${res.counters.updated}, off${res.counters.deactivated}, on${res.counters.reactivated}`)
     await loadStatus()
   } catch (e: any) {

@@ -5,6 +5,7 @@ import { useSupabase } from '~/utils/supabase'
 const supabase = useSupabase()
 const { items, loading, load, remove } = useCrud('teams')
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const editorOpen = ref(false)
 const editing = ref<any | null>(null)
 const saving = ref(false)
@@ -131,6 +132,7 @@ async function save() {
       }
     }
 
+    auditLog({ action: editing.value ? 'update' : 'create', target_type: 'team', target_id: teamId, target_label: payload.name })
     await reloadAll()
     editorOpen.value = false
     toast.success('Saved')
@@ -141,7 +143,7 @@ async function save() {
 async function del(row: any) {
   const ok = await toast.confirm({ title: 'Delete', message: `Delete team "${row.name}"? Members will be unassigned from the team.`, variant: 'danger', confirmLabel: 'Delete' })
   if (!ok) return
-  try { await remove(row.id); await reloadAll(); toast.success('Deleted') } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
+  try { await remove(row.id); auditLog({ action: 'delete', target_type: 'team', target_id: row.id, target_label: row.name }); await reloadAll(); toast.success('Deleted') } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
 }
 
 function initials(name: string) {

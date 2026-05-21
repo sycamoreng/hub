@@ -6,6 +6,7 @@ import { useExit, type ExitUnit, type ExitChecklistItem } from '~/composables/us
 const supabase = useSupabase()
 const toast = useToast()
 const { user } = useAuth()
+const { log: auditLog } = useAuditLog()
 const { loadUnits, loadItems, notifyHods } = useExit()
 
 const route = useRoute()
@@ -119,6 +120,7 @@ async function initiateExit() {
     if (data) {
       await notifyHods(data as any, (data as any).staff?.full_name ?? 'Staff member')
     }
+    auditLog({ action: 'initiate_exit', target_type: 'exit_case', target_id: data?.id, target_label: (data as any)?.staff?.full_name })
     toast.success('Exit case opened. Unit heads have been notified.')
     showInitiate.value = false
     initiateForm.value = {
@@ -151,6 +153,7 @@ async function updateItem(item: ExitChecklistItem, patch: Partial<ExitChecklistI
     }
     const { error } = await supabase.from('exit_checklist_items').update(payload).eq('id', item.id)
     if (error) throw error
+    auditLog({ action: 'update', target_type: 'exit_checklist_item', target_id: item.id, target_label: `${item.title} → ${nextStatus}` })
     if (selectedCase.value) items.value = await loadItems(selectedCase.value.id)
     await maybeAutoComplete()
   } catch (e: any) {
@@ -199,6 +202,7 @@ async function hcFinalConfirm() {
       updated_at: new Date().toISOString()
     }).eq('id', selectedCase.value.id)
     if (error) throw error
+    auditLog({ action: 'hc_final_confirm', target_type: 'exit_case', target_id: selectedCase.value.id, target_label: selectedCase.value.staff?.full_name })
     toast.success('HC has confirmed final clearance.')
     await load()
     const refreshed = cases.value.find(c => c.id === selectedCase.value!.id)
@@ -220,6 +224,7 @@ async function setCaseStatus(status: 'in_progress' | 'completed' | 'cancelled') 
     if (status === 'completed') payload.completed_at = new Date().toISOString()
     const { error } = await supabase.from('exit_cases').update(payload).eq('id', selectedCase.value.id)
     if (error) throw error
+    auditLog({ action: `set_status_${status}`, target_type: 'exit_case', target_id: selectedCase.value.id, target_label: selectedCase.value.staff?.full_name })
     toast.success('Case updated.')
     await load()
     const refreshed = cases.value.find(c => c.id === selectedCase.value!.id)

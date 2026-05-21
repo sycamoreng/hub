@@ -6,6 +6,7 @@ const emit = defineEmits<{ (e: 'close'): void; (e: 'imported'): void }>()
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const csv = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -145,6 +146,7 @@ async function doImport() {
       if (sid) await supabase.from('payroll_employees').update({ staff_id: sid }).eq('email', p.email)
     }
 
+    auditLog({ action: 'bulk_import', target_type: 'payroll_employee', target_label: `${payload.length} employees (${inserts.length} new, ${updates.length} updated)` })
     toast.success(`Imported ${payload.length} employees (${inserts.length} new, ${updates.length} updated)`)
     emit('imported')
     emit('close')

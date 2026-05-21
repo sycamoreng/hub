@@ -5,6 +5,7 @@ definePageMeta({ middleware: ['auth'], layout: 'admin' })
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const { canManageSection } = useAuth()
 
 const tab = ref<'sparks' | 'weights' | 'badges' | 'values' | 'wordle' | 'typing'>('sparks')
@@ -30,6 +31,7 @@ async function addTypingCategory() {
   if (!c.slug.trim() || !c.name.trim()) { toast.error('Slug and name required'); return }
   const { error } = await supabase.from('typing_categories').insert({ slug: c.slug.trim().toLowerCase(), name: c.name.trim(), description: c.description, sort_order: typingCategories.value.length })
   if (error) { toast.error(error.message); return }
+  auditLog({ action: 'create', target_type: 'typing_category', target_label: c.name.trim() })
   typingNewCategory.value = { slug: '', name: '', description: '' }
   await loadTyping()
   toast.success('Category added')
@@ -37,12 +39,14 @@ async function addTypingCategory() {
 
 async function toggleTypingCategory(cat: any) {
   await supabase.from('typing_categories').update({ is_active: !cat.is_active }).eq('id', cat.id)
+  auditLog({ action: cat.is_active ? 'deactivate' : 'activate', target_type: 'typing_category', target_id: cat.id, target_label: cat.name })
   await loadTyping()
 }
 
 async function deleteTypingCategory(cat: any) {
   if (!confirm(`Delete category "${cat.name}" and all its prompts?`)) return
   await supabase.from('typing_categories').delete().eq('id', cat.id)
+  auditLog({ action: 'delete', target_type: 'typing_category', target_id: cat.id, target_label: cat.name })
   await loadTyping()
 }
 
@@ -51,6 +55,7 @@ async function addTypingPrompt() {
   if (!p.text.trim() || !p.category_id) { toast.error('Pick category and prompt text'); return }
   const { error } = await supabase.from('typing_prompts').insert({ category_id: p.category_id, text: p.text.trim(), length_tier: p.length_tier })
   if (error) { toast.error(error.message); return }
+  auditLog({ action: 'create', target_type: 'typing_prompt', target_label: p.text.trim().slice(0, 50) })
   typingNew.value.text = ''
   await loadTyping()
   toast.success('Prompt added')
@@ -58,12 +63,14 @@ async function addTypingPrompt() {
 
 async function toggleTypingPrompt(p: any) {
   await supabase.from('typing_prompts').update({ is_active: !p.is_active }).eq('id', p.id)
+  auditLog({ action: p.is_active ? 'deactivate' : 'activate', target_type: 'typing_prompt', target_id: p.id, target_label: (p.text ?? '').slice(0, 50) })
   await loadTyping()
 }
 
 async function deleteTypingPrompt(p: any) {
   if (!confirm('Delete this prompt?')) return
   await supabase.from('typing_prompts').delete().eq('id', p.id)
+  auditLog({ action: 'delete', target_type: 'typing_prompt', target_id: p.id, target_label: (p.text ?? '').slice(0, 50) })
   await loadTyping()
 }
 
@@ -157,6 +164,7 @@ async function saveSpark() {
   try {
     if (f.id) await supabase.from('daily_sparks').update(payload).eq('id', f.id)
     else await supabase.from('daily_sparks').insert(payload)
+    auditLog({ action: f.id ? 'update' : 'create', target_type: 'daily_spark', target_label: payload.question.slice(0, 50) })
     toast.success('Saved')
     resetSpark()
     await loadAll()
@@ -166,6 +174,7 @@ async function deleteSpark(row: any) {
   const ok = await toast.confirm({ title: 'Delete spark', message: 'Remove this Daily Spark?', confirmLabel: 'Delete', variant: 'danger' })
   if (!ok) return
   await supabase.from('daily_sparks').delete().eq('id', row.id)
+  auditLog({ action: 'delete', target_type: 'daily_spark', target_id: row.id, target_label: (row.question ?? '').slice(0, 50) })
   toast.success('Deleted')
   await loadAll()
 }
@@ -177,6 +186,7 @@ async function saveWeight(row: any) {
       points: Number(row.points) || 0,
       is_active: row.is_active
     }).eq('id', row.id)
+    auditLog({ action: 'update', target_type: 'point_weight', target_id: row.id, target_label: row.event_kind })
     toast.success('Saved')
   } catch (e: any) { toast.error(e.message ?? 'Failed') }
 }
@@ -192,6 +202,7 @@ async function saveBadge(row: any) {
       metric: row.metric,
       is_active: row.is_active
     }).eq('id', row.id)
+    auditLog({ action: 'update', target_type: 'badge', target_id: row.id, target_label: row.name })
     toast.success('Saved')
   } catch (e: any) { toast.error(e.message ?? 'Failed') }
 }
@@ -207,6 +218,7 @@ async function saveWordleSettings() {
     }).eq('id', 1)
     wordleSettings.value.letter_count = lc
     wordleSettings.value.max_guesses = mg
+    auditLog({ action: 'update', target_type: 'wordle_settings', target_label: `${lc} letters, ${mg} guesses` })
     toast.success('Saved')
   } catch (e: any) { toast.error(e.message ?? 'Failed') }
 }
@@ -217,6 +229,7 @@ async function addWord() {
   try {
     const { error } = await supabase.from('wordle_words').insert({ word: raw, length: raw.length })
     if (error) throw error
+    auditLog({ action: 'create', target_type: 'wordle_word', target_label: raw })
     newWord.value = ''
     toast.success('Added')
     await loadAll()
@@ -227,6 +240,7 @@ async function toggleWord(row: any) {
   try {
     await supabase.from('wordle_words').update({ is_active: !row.is_active }).eq('word', row.word)
     row.is_active = !row.is_active
+    auditLog({ action: row.is_active ? 'activate' : 'deactivate', target_type: 'wordle_word', target_label: row.word })
   } catch (e: any) { toast.error(e.message ?? 'Failed') }
 }
 
@@ -234,6 +248,7 @@ async function deleteWord(row: any) {
   const ok = await toast.confirm({ title: 'Delete word', message: `Remove "${row.word}" from the pool?`, confirmLabel: 'Delete', variant: 'danger' })
   if (!ok) return
   await supabase.from('wordle_words').delete().eq('word', row.word)
+  auditLog({ action: 'delete', target_type: 'wordle_word', target_label: row.word })
   await loadAll()
 }
 
@@ -257,6 +272,7 @@ async function saveValue(row: any) {
       color: row.color,
       is_active: row.is_active
     }).eq('id', row.id)
+    auditLog({ action: 'update', target_type: 'kudos_value', target_id: row.id, target_label: row.label })
     toast.success('Saved')
   } catch (e: any) { toast.error(e.message ?? 'Failed') }
 }

@@ -4,6 +4,7 @@ import { WEEKDAYS } from '~/composables/useAttendance'
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const templates = ref<any[]>([])
 const departments = ref<any[]>([])
@@ -154,6 +155,7 @@ async function save() {
       if (rmErr) throw rmErr
     }
 
+    auditLog({ action: editor.value.id ? 'update' : 'create', target_type: 'schedule_template', target_id: tplId, target_label: payload.name })
     toast.success('Template saved')
     await loadAll()
     await selectTemplate(tplId)
@@ -167,6 +169,7 @@ async function del() {
   try {
     const { error } = await supabase.from('schedule_templates').delete().eq('id', editor.value.id)
     if (error) throw error
+    auditLog({ action: 'delete', target_type: 'schedule_template', target_id: editor.value.id, target_label: editor.value.name })
     toast.success('Deleted')
     editor.value = null
     selectedId.value = ''

@@ -5,6 +5,7 @@ import { useSupabase } from '~/utils/supabase'
 const supabase = useSupabase()
 const { items, loading, load, create, update, remove } = useCrud('staff_members')
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const departments = ref<any[]>([])
 const locations = ref<any[]>([])
 const teams = ref<any[]>([])
@@ -169,6 +170,8 @@ async function save(payload: Record<string, any>) {
         )
       }
     }
+    const action = editing.value?.id ? 'update' : 'create'
+    auditLog({ action, target_type: 'staff_member', target_id: staffId, target_label: data.full_name })
     editorOpen.value = false
   } catch (e: any) { toast.error(e.message ?? 'Failed to save') }
   finally { saving.value = false }
@@ -177,7 +180,11 @@ async function save(payload: Record<string, any>) {
 async function del(row: any) {
   const ok = await toast.confirm({ title: 'Delete', message: `Delete "${row.full_name}"?` + ' This cannot be undone.', variant: 'danger', confirmLabel: 'Delete' })
   if (!ok) return
-  try { await remove(row.id); toast.success('Deleted') } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
+  try {
+    await remove(row.id)
+    auditLog({ action: 'delete', target_type: 'staff_member', target_id: row.id, target_label: row.full_name })
+    toast.success('Deleted')
+  } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
 }
 </script>
 

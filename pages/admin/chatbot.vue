@@ -3,6 +3,7 @@ definePageMeta({ layout: 'admin', middleware: ['auth'] })
 import { useSupabase } from '~/utils/supabase'
 
 const supabase = useSupabase()
+const { log: auditLog } = useAuditLog()
 const settings = ref<any | null>(null)
 const loading = ref(true)
 const saving = ref(false)
@@ -72,6 +73,7 @@ async function save() {
       if (error) throw error
       settings.value = data
     }
+    auditLog({ action: 'update', target_type: 'chatbot_settings', target_label: 'Chatbot settings' })
     message.value = 'Settings saved.'
   } catch (e: any) {
     message.value = e.message ?? 'Failed to save'
@@ -103,6 +105,7 @@ async function uploadFile(event: Event) {
     })
     const result = await res.json()
     if (!res.ok) throw new Error(result.error || 'Upload failed')
+    auditLog({ action: 'upload_kb_document', target_type: 'kb_document', target_label: result.title })
     uploadMsg.value = `Uploaded "${result.title}" - ${result.chunks} chunks created.`
     loadDocs()
   } catch (e: any) {
@@ -135,6 +138,7 @@ async function uploadPaste() {
     })
     const result = await res.json()
     if (!res.ok) throw new Error(result.error || 'Upload failed')
+    auditLog({ action: 'upload_kb_document', target_type: 'kb_document', target_label: result.title })
     uploadMsg.value = `Added "${result.title}" - ${result.chunks} chunks created.`
     pasteTitle.value = ''
     pasteContent.value = ''
@@ -150,6 +154,7 @@ async function uploadPaste() {
 async function deleteDoc(doc: any) {
   if (!confirm(`Delete "${doc.title}"? This removes it from the knowledge base.`)) return
   await supabase.from('kb_documents').delete().eq('id', doc.id)
+  auditLog({ action: 'delete', target_type: 'kb_document', target_id: doc.id, target_label: doc.title })
   loadDocs()
 }
 

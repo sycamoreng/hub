@@ -4,6 +4,7 @@ import { useSupabase } from '~/utils/supabase'
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const items = ref<any[]>([])
 const loading = ref(true)
@@ -150,6 +151,7 @@ async function runBulkImport() {
 
     let msg = `Imported ${inserts.length + updates.length} enrollments (${inserts.length} new, ${updates.length} updated)`
     if (skipped.length) msg += ` — skipped ${skipped.length} unknown email${skipped.length === 1 ? '' : 's'}`
+    auditLog({ action: 'bulk_import', target_type: 'hmo_enrollment', target_label: msg })
     toast.success(msg)
     bulkOpen.value = false
     bulkCsv.value = ''
@@ -252,6 +254,7 @@ async function save() {
       const { error } = await supabase.from('hmo_providers').insert(payload)
       if (error) throw error
     }
+    auditLog({ action: editing.value.id ? 'update' : 'create', target_type: 'hmo_provider', target_label: payload.name })
     toast.success('Saved')
     editing.value = null
     await load()
@@ -339,6 +342,7 @@ async function saveEnrollment() {
       const { error } = await supabase.from('staff_hmo_enrollments').insert(payload)
       if (error) throw error
     }
+    auditLog({ action: enrollmentEditing.value.id ? 'update' : 'create', target_type: 'hmo_enrollment', target_label: staffOptions.value.find(s => s.id === payload.staff_id)?.full_name ?? payload.staff_id })
     toast.success('Enrollment saved')
     enrollmentEditing.value = null
     await loadEnrollments()
@@ -355,6 +359,7 @@ async function removeEnrollment(row: any) {
   try {
     const { error } = await supabase.from('staff_hmo_enrollments').delete().eq('id', row.id)
     if (error) throw error
+    auditLog({ action: 'delete', target_type: 'hmo_enrollment', target_id: row.id, target_label: row.staff?.full_name ?? '' })
     toast.success('Enrollment removed')
     await loadEnrollments()
   } catch (e: any) {
@@ -368,6 +373,7 @@ async function remove(row: any) {
   try {
     const { error } = await supabase.from('hmo_providers').delete().eq('id', row.id)
     if (error) throw error
+    auditLog({ action: 'delete', target_type: 'hmo_provider', target_id: row.id, target_label: row.name })
     toast.success('Deleted')
     await load()
   } catch (e: any) {

@@ -3,7 +3,10 @@ const sidebarOpen = ref(false)
 const route = useRoute()
 const { user, isAdmin, signOut } = useAuth()
 const { touchActive } = useAuditLog()
-watch(() => route.fullPath, () => { sidebarOpen.value = false })
+watch(() => route.fullPath, () => {
+  sidebarOpen.value = false
+  if (isAdmin.value) touchActive()
+})
 
 onMounted(() => {
   if (isAdmin.value) touchActive()

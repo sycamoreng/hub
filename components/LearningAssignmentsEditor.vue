@@ -18,6 +18,7 @@ const emit = defineEmits<{ (e: 'close'): void }>()
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const assignments = ref<Assignment[]>([])
 const departments = ref<Dept[]>([])
@@ -111,6 +112,7 @@ async function add() {
   try {
     const { error } = await supabase.from('learning_assignments').insert(rows)
     if (error) throw error
+    auditLog({ action: 'create', target_type: 'learning_assignment', target_label: `${scopeType.value}: ${rows.length} assignment(s)` })
     toast.success(rows.length > 1 ? `Assigned to ${rows.length} users` : 'Assigned')
     scopeId.value = ''
     userIds.value = []
@@ -130,6 +132,7 @@ async function remove(a: Assignment) {
   try {
     const { error } = await supabase.from('learning_assignments').delete().eq('id', a.id)
     if (error) throw error
+    auditLog({ action: 'delete', target_type: 'learning_assignment', target_id: a.id, target_label: scopeLabel(a) })
     toast.success('Removed')
     await loadAll()
   } catch (e: any) {

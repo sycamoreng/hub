@@ -29,6 +29,7 @@ import {
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const {
   loadCycles, saveCycle, deleteCycle, setPrimaryCycle,
   loadFrameworks, saveFramework, deleteFramework,
@@ -208,6 +209,7 @@ async function submitReviewInvitations() {
         })
       }
     }
+    auditLog({ action: 'create', target_type: 'performance_review', target_label: `${REVIEWER_TYPE_LABELS[payload.reviewer_type as ReviewerType]} for ${payload.subject_staff_id}` })
     toast.push({ type: 'success', title: 'Review invitations sent', message: REVIEWER_TYPE_LABELS[payload.reviewer_type as ReviewerType] })
     editingReview.value = null
     await reloadReviews()
@@ -227,6 +229,7 @@ async function cancelReview(r: any) {
   if (!ok) return
   try {
     await saveReview({ id: r.id, status: 'cancelled' })
+    auditLog({ action: 'cancel', target_type: 'performance_review', target_id: r.id, target_label: r.subject?.full_name })
     toast.push({ type: 'success', title: 'Review cancelled', message: r.subject?.full_name })
     await reloadReviews()
   } catch (e: any) {
@@ -239,6 +242,7 @@ async function removeReview(r: any) {
   if (!ok) return
   try {
     await deleteReview(r.id)
+    auditLog({ action: 'delete', target_type: 'performance_review', target_id: r.id, target_label: r.subject?.full_name ?? '' })
     toast.push({ type: 'success', title: 'Review deleted', message: r.subject?.full_name ?? '' })
     await reloadReviews()
   } catch (e: any) {
@@ -269,7 +273,9 @@ function editCycle(c: PerformanceCycle) {
 async function submitCycle() {
   if (!editingCycle.value || !editingCycle.value.name) return
   try {
+    const isNew = !editingCycle.value.id
     await saveCycle(editingCycle.value)
+    auditLog({ action: isNew ? 'create' : 'update', target_type: 'performance_cycle', target_label: editingCycle.value.name ?? '' })
     toast.push({ type: 'success', title: 'Cycle saved', message: editingCycle.value.name ?? '' })
     editingCycle.value = null
     await loadAll()
@@ -283,6 +289,7 @@ async function removeCycle(c: PerformanceCycle) {
   if (!ok) return
   try {
     await deleteCycle(c.id)
+    auditLog({ action: 'delete', target_type: 'performance_cycle', target_id: c.id, target_label: c.name })
     toast.push({ type: 'success', title: 'Cycle deleted', message: c.name })
     if (selectedCycleId.value === c.id) selectedCycleId.value = ''
     await loadAll()
@@ -294,6 +301,7 @@ async function removeCycle(c: PerformanceCycle) {
 async function markPrimary(c: PerformanceCycle) {
   try {
     await setPrimaryCycle(c.id)
+    auditLog({ action: 'set_primary', target_type: 'performance_cycle', target_id: c.id, target_label: c.name })
     toast.push({ type: 'success', title: 'Primary cycle set', message: c.name })
     await loadAll()
   } catch (e: any) {
@@ -316,7 +324,9 @@ function editFramework(f: PerformanceFramework) { editingFramework.value = { ...
 async function submitFramework() {
   if (!editingFramework.value?.name) return
   try {
+    const isNew = !editingFramework.value.id
     await saveFramework(editingFramework.value)
+    auditLog({ action: isNew ? 'create' : 'update', target_type: 'performance_framework', target_label: editingFramework.value.name ?? '' })
     toast.push({ type: 'success', title: 'Framework saved', message: editingFramework.value.name ?? '' })
     editingFramework.value = null
     await loadAll()
@@ -329,6 +339,7 @@ async function removeFramework(f: PerformanceFramework) {
   if (!ok) return
   try {
     await deleteFramework(f.id)
+    auditLog({ action: 'delete', target_type: 'performance_framework', target_id: f.id, target_label: f.name })
     toast.push({ type: 'success', title: 'Framework deleted', message: f.name })
     await loadAll()
   } catch (e: any) {
@@ -415,6 +426,7 @@ async function submitObjective() {
       if (!keptIds.has(m.id)) await deleteMeasure(m.id)
     }
 
+    auditLog({ action: payload.id ? 'update' : 'create', target_type: 'performance_objective', target_id: saved.id, target_label: saved.title })
     toast.push({ type: 'success', title: 'Objective saved', message: saved.title })
     editingObjective.value = null
     await reloadObjectives()
@@ -428,6 +440,7 @@ async function removeObjective(o: any) {
   if (!ok) return
   try {
     await deleteObjective(o.id)
+    auditLog({ action: 'delete', target_type: 'performance_objective', target_id: o.id, target_label: o.title })
     toast.push({ type: 'success', title: 'Objective deleted', message: o.title })
     await reloadObjectives()
   } catch (e: any) {
@@ -669,6 +682,9 @@ async function bulkUploadObjectives() {
       }
     }
 
+    if (createdObjectives) {
+      auditLog({ action: 'bulk_import', target_type: 'performance_objective', target_label: `${createdObjectives} objectives, ${createdMeasures} key results` })
+    }
     toast.push({
       type: errors.length && !createdObjectives ? 'error' : 'success',
       title: `Imported ${createdObjectives} objective${createdObjectives === 1 ? '' : 's'} (${createdMeasures} key results)`,
@@ -708,7 +724,9 @@ async function submitRecognition() {
     return
   }
   try {
+    const isNewRec = !editingRecognition.value.id
     await saveRecognition(editingRecognition.value)
+    auditLog({ action: isNewRec ? 'create' : 'update', target_type: 'performance_recognition', target_label: editingRecognition.value.title ?? '' })
     toast.push({ type: 'success', title: 'Recognition saved', message: editingRecognition.value.title ?? '' })
     editingRecognition.value = null
     await reloadRecognitions()
@@ -721,6 +739,7 @@ async function removeRecognition(r: any) {
   if (!ok) return
   try {
     await deleteRecognition(r.id)
+    auditLog({ action: 'delete', target_type: 'performance_recognition', target_id: r.id, target_label: r.title })
     toast.push({ type: 'success', title: 'Recognition deleted', message: r.title })
     await reloadRecognitions()
   } catch (e: any) {
@@ -760,7 +779,9 @@ async function submitPip() {
       payload.closed_at = payload.closed_at ?? new Date().toISOString()
       payload.closed_outcome = payload.closed_outcome || payload.status
     }
+    const isNewPip = !payload.id
     await savePip(payload)
+    auditLog({ action: isNewPip ? 'create' : 'update', target_type: 'pip', target_label: editingPip.value.title ?? '' })
     toast.push({ type: 'success', title: 'Plan saved', message: editingPip.value.title ?? '' })
     editingPip.value = null
     await reloadPips()
@@ -773,6 +794,7 @@ async function removePip(p: any) {
   if (!ok) return
   try {
     await deletePip(p.id)
+    auditLog({ action: 'delete', target_type: 'pip', target_id: p.id, target_label: p.title })
     toast.push({ type: 'success', title: 'Plan deleted', message: p.title })
     if (expandedPipId.value === p.id) expandedPipId.value = ''
     await reloadPips()
@@ -800,7 +822,9 @@ function startNewCheckin(p: any) {
 async function submitCheckin() {
   if (!editingCheckin.value?.pip_id) return
   try {
+    const isNewCheckin = !editingCheckin.value.id
     await saveCheckin(editingCheckin.value)
+    auditLog({ action: isNewCheckin ? 'create' : 'update', target_type: 'pip_checkin', target_label: `PIP ${editingCheckin.value.pip_id} check-in` })
     toast.push({ type: 'success', title: 'Check-in saved', message: '' })
     const pipId = editingCheckin.value.pip_id
     editingCheckin.value = null
@@ -814,6 +838,7 @@ async function removeCheckin(c: PerformanceImprovementCheckin) {
   if (!ok) return
   try {
     await deleteCheckin(c.id)
+    auditLog({ action: 'delete', target_type: 'pip_checkin', target_id: c.id, target_label: `PIP ${c.pip_id} check-in` })
     pipCheckins.value = await loadPipCheckins(c.pip_id)
   } catch (e: any) {
     toast.push({ type: 'error', title: 'Could not delete', message: e?.message ?? 'Unexpected error' })

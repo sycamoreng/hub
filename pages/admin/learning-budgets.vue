@@ -4,6 +4,7 @@ import { useSupabase } from '~/utils/supabase'
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const items = ref<any[]>([])
 const loading = ref(true)
@@ -59,6 +60,7 @@ async function save() {
       const { error } = await supabase.from('learning_budgets').insert(payload)
       if (error) throw error
     }
+    auditLog({ action: editing.value.id ? 'update' : 'create', target_type: 'learning_budget', target_label: payload.level })
     toast.success('Saved')
     editing.value = null
     await load()
@@ -75,6 +77,7 @@ async function remove(row: any) {
   try {
     const { error } = await supabase.from('learning_budgets').delete().eq('id', row.id)
     if (error) throw error
+    auditLog({ action: 'delete', target_type: 'learning_budget', target_id: row.id, target_label: row.level })
     toast.success('Deleted')
     await load()
   } catch (e: any) {

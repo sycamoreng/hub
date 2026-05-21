@@ -5,6 +5,7 @@ import { useSupabase } from '~/utils/supabase'
 const supabase = useSupabase()
 const { items, loading, load, create, update, remove } = useCrud('announcements')
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const editorOpen = ref(false)
 const editing = ref<any | null>(null)
@@ -142,12 +143,14 @@ async function save(payload: Record<string, any>) {
       post_to_chat_space_ids: Array.isArray(payload.post_to_chat_space_ids) ? payload.post_to_chat_space_ids : []
     }
     let id: string | undefined = editing.value?.id
+    const isUpdate = !!id
     if (id) {
       await update(id, data)
     } else {
       const created = await create(data)
       id = (created as any)?.id
     }
+    auditLog({ action: isUpdate ? 'update' : 'create', target_type: 'announcement', target_id: id, target_label: data.title })
     if (data.email_on_publish && data.is_active && id && !previouslySent) {
       try {
         const res = await queueAnnouncementEmail(id)
@@ -178,7 +181,7 @@ async function save(payload: Record<string, any>) {
 async function del(row: any) {
   const ok = await toast.confirm({ title: 'Delete', message: `Delete "${row.title}"?` + ' This cannot be undone.', variant: 'danger', confirmLabel: 'Delete' })
   if (!ok) return
-  try { await remove(row.id); toast.success('Deleted') } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
+  try { await remove(row.id); auditLog({ action: 'delete', target_type: 'announcement', target_id: row.id, target_label: row.title }); toast.success('Deleted') } catch (e: any) { toast.error(e.message ?? 'Failed to delete') }
 }
 </script>
 

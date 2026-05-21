@@ -7,6 +7,7 @@ import { emailUserNotification } from '~/composables/useNotifications'
 const supabase = useSupabase()
 const toast = useToast()
 const { user, canPerform } = useAuth()
+const { log: auditLog } = useAuditLog()
 const { loadLeaveTypes, loadPublicHolidays } = useLeave()
 
 const tab = ref<'requests' | 'balances' | 'types' | 'holidays'>('requests')
@@ -156,6 +157,12 @@ async function applyDecision() {
       })
     } catch { /* non-fatal */ }
 
+    auditLog({
+      action: next === 'approved' ? 'approve' : 'decline',
+      target_type: 'leave_request',
+      target_id: req.id,
+      target_label: `${req.staff?.full_name} - ${req.leave_type?.name ?? 'leave'}`
+    })
     toast.success('Decision saved')
     selected.value = null
     await loadRequests()
@@ -191,6 +198,7 @@ async function saveType() {
     }
     if (t.id) await supabase.from('leave_types').update(payload).eq('id', t.id)
     else await supabase.from('leave_types').insert(payload)
+    auditLog({ action: t.id ? 'update' : 'create', target_type: 'leave_type', target_label: payload.name })
     toast.success('Saved')
     editingType.value = null
     types.value = await loadLeaveTypes()
@@ -203,6 +211,7 @@ async function deleteType(t: any) {
   try {
     const { error } = await supabase.from('leave_types').delete().eq('id', t.id)
     if (error) throw error
+    auditLog({ action: 'delete', target_type: 'leave_type', target_id: t.id, target_label: t.name })
     toast.success('Deleted')
     types.value = await loadLeaveTypes()
   } catch (e: any) { toast.error(e.message ?? 'Failed') }
@@ -225,6 +234,7 @@ async function saveHoliday() {
     }
     if (h.id) await supabase.from('public_holidays').update(payload).eq('id', h.id)
     else await supabase.from('public_holidays').insert(payload)
+    auditLog({ action: h.id ? 'update' : 'create', target_type: 'public_holiday', target_label: payload.name })
     toast.success('Saved')
     editingHoliday.value = null
     holidays.value = await loadPublicHolidays()
@@ -237,6 +247,7 @@ async function deleteHoliday(h: any) {
   try {
     const { error } = await supabase.from('public_holidays').delete().eq('id', h.id)
     if (error) throw error
+    auditLog({ action: 'delete', target_type: 'public_holiday', target_id: h.id, target_label: h.name })
     toast.success('Deleted')
     holidays.value = await loadPublicHolidays()
   } catch (e: any) { toast.error(e.message ?? 'Failed') }
@@ -258,6 +269,7 @@ async function saveBalance() {
         updated_at: new Date().toISOString()
       })
       .eq('id', b.id)
+    auditLog({ action: 'update', target_type: 'leave_balance', target_id: b.id, target_label: `${b.staff?.full_name} - ${b.leave_type?.name}` })
     toast.success('Saved')
     editingBalance.value = null
     await loadBalances()
@@ -285,6 +297,7 @@ async function submitPayout() {
       updated_at: new Date().toISOString()
     }).eq('id', row.id)
     if (error) throw error
+    auditLog({ action: `payout_${status}`, target_type: 'leave_request', target_id: row.id, target_label: `${row.staff?.full_name} - ${formatNGN(Number(row.allowance_amount))}` })
     try {
       await supabase.from('notifications').insert({
         recipient_id: row.requester_user_id,

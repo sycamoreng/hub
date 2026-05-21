@@ -62,6 +62,7 @@ const ACTIONS: CrudAction[] = ['create', 'read', 'update', 'delete']
 
 const supabase = useSupabase()
 const { profile } = useAuth()
+const { log: auditLog } = useAuditLog()
 
 const admins = ref<AdminRow[]>([])
 const presets = ref<RolePreset[]>([])
@@ -191,6 +192,7 @@ async function save() {
     error.value = e.message
     return
   }
+  auditLog({ action: isCreate ? 'create' : 'update', target_type: 'admin_user', target_label: email })
   if (isCreate) {
     void notifyAdminAdded(email, payload.role, profile.value?.display_name || profile.value?.email || '')
     toast.success(`Admin added. ${email} will be emailed shortly.`)
@@ -239,6 +241,7 @@ async function removeAdmin(row: AdminRow) {
     error.value = e.message
     return
   }
+  auditLog({ action: 'delete', target_type: 'admin_user', target_label: row.email })
   await load()
 }
 

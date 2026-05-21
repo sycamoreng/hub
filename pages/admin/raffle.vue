@@ -6,6 +6,7 @@ definePageMeta({ layout: 'admin' })
 const supabase = useSupabase()
 const { isAdmin, isSuperAdmin, ready } = useAuth()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 interface Prize {
   id: string
@@ -99,6 +100,7 @@ async function toggleSidebarVisibility() {
     .eq('id', 1)
   if (error) { toast.error(error.message); return }
   settings.value.visible_on_sidebar = next
+  auditLog({ action: next ? 'show_sidebar' : 'hide_sidebar', target_type: 'raffle', target_label: 'Sidebar visibility' })
   toast.success(next ? 'Raffle link visible in sidebar' : 'Raffle link hidden from sidebar')
 }
 
@@ -114,6 +116,7 @@ async function savePrize(p: Prize) {
     .update({ quantity: p.quantity })
     .eq('id', p.id)
   if (error) { toast.error(error.message); return }
+  auditLog({ action: 'update', target_type: 'raffle_prize', target_id: p.id, target_label: `${p.name}: ${p.quantity}` })
   toast.success(`${p.name} saved`)
 }
 
@@ -124,6 +127,7 @@ async function saveBlanks() {
     .update({ blanks_count: settings.value.blanks_count })
     .eq('id', 1)
   if (error) { toast.error(error.message); return }
+  auditLog({ action: 'update', target_type: 'raffle_blanks', target_label: `${settings.value.blanks_count} blanks` })
   toast.success('Blanks updated')
 }
 
@@ -188,6 +192,7 @@ async function seal() {
   try {
     const { error } = await supabase.rpc('raffle_seed')
     if (error) { toast.error(error.message); return }
+    auditLog({ action: 'seal', target_type: 'raffle' })
     toast.success('Raffle sealed')
     await loadAll()
   } finally {
@@ -207,6 +212,7 @@ async function goLive() {
   try {
     const { error } = await supabase.rpc('raffle_set_status', { new_status: 'live' })
     if (error) { toast.error(error.message); return }
+    auditLog({ action: 'go_live', target_type: 'raffle' })
     toast.success('Raffle is LIVE')
     await loadAll()
   } finally {
@@ -226,6 +232,7 @@ async function close() {
   try {
     const { error } = await supabase.rpc('raffle_set_status', { new_status: 'closed' })
     if (error) { toast.error(error.message); return }
+    auditLog({ action: 'close', target_type: 'raffle' })
     toast.success('Raffle closed')
     await loadAll()
   } finally {
@@ -252,6 +259,7 @@ async function reset() {
   try {
     const { error } = await supabase.rpc('raffle_reset')
     if (error) { toast.error(error.message); return }
+    auditLog({ action: 'reset', target_type: 'raffle' })
     toast.success('Raffle reset to draft')
     simulation.value = []
     stats.value = null

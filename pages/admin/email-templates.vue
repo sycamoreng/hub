@@ -4,6 +4,7 @@ import { useSupabase } from '~/utils/supabase'
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const templates = ref<any[]>([])
 const loading = ref(true)
@@ -47,6 +48,7 @@ async function save() {
         is_system: false
       })
     }
+    auditLog({ action: editing.value.id ? 'update' : 'create', target_type: 'email_template', target_label: editing.value.name })
     toast.success('Saved')
     closeEdit()
     await load()
@@ -62,6 +64,7 @@ async function remove(t: any) {
   const ok = await toast.confirm({ title: 'Delete', message: `Delete "${t.name}"?`, variant: 'danger', confirmLabel: 'Delete' })
   if (!ok) return
   await supabase.from('email_templates').delete().eq('id', t.id)
+  auditLog({ action: 'delete', target_type: 'email_template', target_id: t.id, target_label: t.name })
   await load()
   toast.success('Deleted')
 }

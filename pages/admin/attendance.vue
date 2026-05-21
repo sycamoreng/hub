@@ -6,6 +6,7 @@ definePageMeta({ layout: 'admin', middleware: ['auth'] })
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const tab = ref<'today' | 'schedules' | 'templates' | 'records' | 'days'>('today')
 
@@ -151,6 +152,7 @@ async function clearPersonalSchedule() {
   if (!(await toast.confirm({ title: 'Remove personal schedule', message: 'Revert this staff member to their group or default template?', variant: 'danger', confirmLabel: 'Remove override' }))) return
   const { error } = await supabase.from('staff_schedules').delete().eq('staff_id', selectedStaffId.value)
   if (error) { toast.error(error.message); return }
+  auditLog({ action: 'remove_schedule_override', target_type: 'staff_schedule', target_label: staff.value.find(s => s.id === selectedStaffId.value)?.full_name ?? selectedStaffId.value })
   toast.success('Personal override removed')
   await loadStaffSchedule()
 }
@@ -169,6 +171,7 @@ async function saveSchedule() {
     }))
     const { error } = await supabase.from('staff_schedules').upsert(rows, { onConflict: 'staff_id,weekday' })
     if (error) throw error
+    auditLog({ action: 'update', target_type: 'staff_schedule', target_label: staff.value.find(s => s.id === selectedStaffId.value)?.full_name ?? selectedStaffId.value })
     toast.success('Schedule saved')
   } catch (e: any) { toast.error(e.message ?? 'Failed to save') }
   finally { savingSchedule.value = false }
@@ -227,6 +230,7 @@ async function addDay() {
   try {
     const { error } = await supabase.from('attendance_days').insert({ day: newDay.value.day, kind: newDay.value.kind, label: newDay.value.label, staff_id: null })
     if (error) throw error
+    auditLog({ action: 'create', target_type: 'attendance_day', target_label: newDay.value.label || newDay.value.day })
     newDay.value = { day: todayLocalISO(), kind: 'holiday', label: '' }
     await loadDays()
     toast.success('Saved')
@@ -234,7 +238,9 @@ async function addDay() {
 }
 async function removeDay(id: string) {
   if (!(await toast.confirm({ title: 'Remove day', message: 'Remove this day?', variant: 'danger', confirmLabel: 'Remove' }))) return
+  const day = days.value.find(d => d.id === id)
   await supabase.from('attendance_days').delete().eq('id', id)
+  auditLog({ action: 'delete', target_type: 'attendance_day', target_id: id, target_label: day?.label || day?.day || id })
   await loadDays()
 }
 

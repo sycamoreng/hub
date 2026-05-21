@@ -2,6 +2,7 @@
 import { usePerformance, type PerformanceCoreValue } from '~/composables/usePerformance'
 
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 const { loadCoreValues, saveCoreValue, deleteCoreValue } = usePerformance()
 
 const items = ref<PerformanceCoreValue[]>([])
@@ -27,6 +28,7 @@ async function save() {
   if (!editing.value.name?.trim()) { toast.error('Name is required'); return }
   try {
     await saveCoreValue(editing.value)
+    auditLog({ action: editing.value.id ? 'update' : 'create', target_type: 'core_value', target_label: editing.value.name })
     editing.value = null
     await reload()
     toast.success('Saved')
@@ -37,6 +39,7 @@ async function remove(v: PerformanceCoreValue) {
   if (!confirm(`Delete "${v.name}"?`)) return
   try {
     await deleteCoreValue(v.id)
+    auditLog({ action: 'delete', target_type: 'core_value', target_id: v.id, target_label: v.name })
     await reload()
   } catch (e: any) { toast.error(e?.message ?? 'Could not delete') }
 }

@@ -4,6 +4,7 @@ import { useSupabase } from '~/utils/supabase'
 
 const supabase = useSupabase()
 const toast = useToast()
+const { log: auditLog } = useAuditLog()
 
 const subject = ref('')
 const heading = ref('')
@@ -52,6 +53,7 @@ async function send() {
     })
     const body = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(body.error || 'Failed to send')
+    auditLog({ action: 'send_broadcast', target_type: 'email_broadcast', target_label: subject.value, details: { audience: audience.value, queued: body.queued } })
     toast.success(`Queued to ${body.queued ?? 0} recipients.`)
     subject.value = ''
     heading.value = ''
