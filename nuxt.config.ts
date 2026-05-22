@@ -13,7 +13,7 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#1f6f9c' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
-        { name: 'apple-mobile-web-app-title', content: 'Sycamore' },
+        { name: 'apple-mobile-web-app-title', content: 'Sycamore Hub' },
         { name: 'mobile-web-app-capable', content: 'yes' }
       ],
       link: [

@@ -313,7 +313,7 @@ const historyMaxScheduled = computed(() => Math.max(1, ...historyBuckets.value.m
         <div class="grid grid-cols-1 md:grid-cols-2">
           <div class="p-6 md:p-8 border-b md:border-b-0 md:border-r border-slate-200">
             <div class="text-xs uppercase tracking-wide text-slate-500 mb-1">Today &middot; {{ WEEKDAYS[todaysWeekday] }}</div>
-            <div class="text-4xl sm:text-5xl font-semibold text-slate-900 tabular-nums">{{ nowString }}</div>
+            <div class="text-3xl sm:text-5xl font-semibold text-slate-900 tabular-nums">{{ nowString }}</div>
 
             <div v-if="dayOverride" class="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
               {{ dayOverride.label || dayOverride.kind }}
@@ -417,31 +417,31 @@ const historyMaxScheduled = computed(() => Math.max(1, ...historyBuckets.value.m
         <div v-if="historyBuckets.length === 0" class="text-xs text-slate-400 italic bg-white border border-slate-200 rounded-xl p-4">
           No attendance history yet.
         </div>
-        <div v-else class="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <table class="w-full text-sm">
-            <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+        <div v-else class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+          <table class="w-full text-xs sm:text-sm min-w-[600px]">
+            <thead class="bg-slate-50 text-slate-500 text-[10px] sm:text-xs uppercase tracking-wide">
               <tr>
-                <th class="text-left px-4 py-2 capitalize">{{ historyRange }}</th>
-                <th class="text-right px-4 py-2">Scheduled</th>
-                <th class="text-right px-4 py-2">On time</th>
-                <th class="text-right px-4 py-2">Late</th>
-                <th class="text-right px-4 py-2">Absent</th>
-                <th class="text-right px-4 py-2">Hours</th>
-                <th class="px-4 py-2 w-40">Attendance</th>
+                <th class="text-left px-3 sm:px-4 py-2 capitalize">{{ historyRange }}</th>
+                <th class="text-right px-3 sm:px-4 py-2">Scheduled</th>
+                <th class="text-right px-3 sm:px-4 py-2">On time</th>
+                <th class="text-right px-3 sm:px-4 py-2">Late</th>
+                <th class="text-right px-3 sm:px-4 py-2">Absent</th>
+                <th class="text-right px-3 sm:px-4 py-2">Hours</th>
+                <th class="px-3 sm:px-4 py-2 w-32 sm:w-40">Attendance</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="b in historyBuckets" :key="b.key" class="border-t border-slate-100">
-                <td class="px-4 py-2.5 font-medium text-slate-900">{{ b.label }}</td>
-                <td class="px-4 py-2.5 text-right tabular-nums text-slate-700">{{ b.scheduled }}</td>
-                <td class="px-4 py-2.5 text-right tabular-nums text-emerald-700 font-semibold">{{ b.present }}</td>
-                <td class="px-4 py-2.5 text-right tabular-nums">
+                <td class="px-3 sm:px-4 py-2 font-medium text-slate-900">{{ b.label }}</td>
+                <td class="px-3 sm:px-4 py-2 text-right tabular-nums text-slate-700">{{ b.scheduled }}</td>
+                <td class="px-3 sm:px-4 py-2 text-right tabular-nums text-emerald-700 font-semibold">{{ b.present }}</td>
+                <td class="px-3 sm:px-4 py-2 text-right tabular-nums">
                   <span class="text-amber-700 font-semibold">{{ b.late }}</span>
-                  <span v-if="b.totalLateMins" class="text-[11px] text-amber-500 ml-1">({{ b.totalLateMins }}m)</span>
+                  <span v-if="b.totalLateMins" class="text-[10px] sm:text-[11px] text-amber-500 ml-1">({{ b.totalLateMins }}m)</span>
                 </td>
-                <td class="px-4 py-2.5 text-right tabular-nums text-rose-700 font-semibold">{{ b.absent }}</td>
-                <td class="px-4 py-2.5 text-right tabular-nums text-slate-700">{{ formatDuration(b.hoursWorked) }}</td>
-                <td class="px-4 py-2.5">
+                <td class="px-3 sm:px-4 py-2 text-right tabular-nums text-rose-700 font-semibold">{{ b.absent }}</td>
+                <td class="px-3 sm:px-4 py-2 text-right tabular-nums text-slate-700">{{ formatDuration(b.hoursWorked) }}</td>
+                <td class="px-3 sm:px-4 py-2">
                   <div class="h-2 rounded-full bg-slate-100 overflow-hidden flex">
                     <div class="bg-emerald-500" :style="{ width: `${(b.present / historyMaxScheduled) * 100}%` }"></div>
                     <div class="bg-amber-500" :style="{ width: `${(b.late / historyMaxScheduled) * 100}%` }"></div>
@@ -456,12 +456,12 @@ const historyMaxScheduled = computed(() => Math.max(1, ...historyBuckets.value.m
 
       <section>
         <h2 class="text-sm font-semibold text-slate-900 mb-3">This week</h2>
-        <div class="grid grid-cols-7 gap-2">
+        <div class="grid grid-cols-7 gap-1 sm:gap-2">
           <div v-for="d in weekDaysData" :key="d.iso"
-            class="bg-white border rounded-xl p-3 text-center"
+            class="bg-white border rounded-lg sm:rounded-xl p-1.5 sm:p-3 text-center"
             :class="d.iso === today ? 'border-sycamore-300 ring-1 ring-sycamore-200' : 'border-slate-200'">
-            <div class="text-[10px] uppercase tracking-wide text-slate-400">{{ d.label }}</div>
-            <div class="text-lg font-semibold text-slate-900">{{ d.day }}</div>
+            <div class="text-[9px] sm:text-[10px] uppercase tracking-wide text-slate-400">{{ d.label }}</div>
+            <div class="text-sm sm:text-lg font-semibold text-slate-900">{{ d.day }}</div>
 
             <div class="mt-1.5 mb-1 flex justify-center">
               <span v-if="d.dayStatus === 'present'" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">On time</span>

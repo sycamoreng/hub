@@ -161,21 +161,21 @@ function statusClass(s: string) {
       </form>
     </section>
 
-    <section class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+    <section class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
       <header class="px-5 py-4 border-b border-slate-200">
         <h2 class="text-sm font-semibold text-slate-900">My requests</h2>
       </header>
       <div v-if="loading" class="p-5 text-sm text-slate-500">Loading...</div>
       <div v-else-if="items.length === 0" class="p-5 text-sm text-slate-500">No requests yet.</div>
-      <table v-else class="w-full text-sm">
-        <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+      <table v-else class="w-full text-xs sm:text-sm min-w-[540px]">
+        <thead class="bg-slate-50 text-slate-500 text-[10px] sm:text-xs uppercase tracking-wide">
           <tr>
-            <th class="text-left px-5 py-2">Date</th>
-            <th class="text-left px-5 py-2">Type</th>
-            <th class="text-right px-5 py-2">Amount</th>
-            <th class="text-right px-5 py-2">Months</th>
-            <th class="text-left px-5 py-2">Status</th>
-            <th class="text-right px-5 py-2"></th>
+            <th class="text-left px-3 sm:px-5 py-2">Date</th>
+            <th class="text-left px-3 sm:px-5 py-2">Type</th>
+            <th class="text-right px-3 sm:px-5 py-2">Amount</th>
+            <th class="text-right px-3 sm:px-5 py-2">Months</th>
+            <th class="text-left px-3 sm:px-5 py-2">Status</th>
+            <th class="text-right px-3 sm:px-5 py-2"></th>
           </tr>
         </thead>
         <tbody>

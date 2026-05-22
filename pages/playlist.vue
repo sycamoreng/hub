@@ -317,19 +317,19 @@ watch(ready, (r) => { if (r) load() }, { immediate: true })
             <div class="absolute -bottom-10 -left-10 w-48 h-48 rounded-full bg-black/10 blur-2xl"></div>
             <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-white/5 blur-3xl"></div>
           </div>
-          <div class="relative p-8 sm:p-10 text-white">
-            <div class="flex items-start justify-between gap-4">
+          <div class="relative p-5 sm:p-10 text-white">
+            <div class="flex items-start justify-between gap-3 sm:gap-4">
               <div>
-                <div class="flex items-center gap-2 mb-3">
-                  <span class="text-3xl">{{ getMoodEmoji(currentPlaylist.theme) }}</span>
-                  <span class="text-xs uppercase tracking-[0.2em] font-bold text-white/70">Playlist of the Week</span>
+                <div class="flex items-center gap-2 mb-2 sm:mb-3">
+                  <span class="text-2xl sm:text-3xl">{{ getMoodEmoji(currentPlaylist.theme) }}</span>
+                  <span class="text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-white/70">Playlist of the Week</span>
                 </div>
-                <h1 class="text-3xl sm:text-4xl font-bold leading-tight">
+                <h1 class="text-2xl sm:text-4xl font-bold leading-tight">
                   {{ currentPlaylist.theme || 'Staff Picks' }}
                 </h1>
-                <p class="mt-2 text-white/70 text-sm">Week of {{ formatWeek(currentPlaylist.week_start) }} -- {{ songs.length }} songs submitted</p>
+                <p class="mt-2 text-white/70 text-xs sm:text-sm">Week of {{ formatWeek(currentPlaylist.week_start) }} -- {{ songs.length }} songs submitted</p>
               </div>
-              <button @click="showAddSong = true" class="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur text-white font-semibold text-sm hover:bg-white/30 transition-colors">
+              <button @click="showAddSong = true" class="shrink-0 inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur text-white font-semibold text-xs sm:text-sm hover:bg-white/30 transition-colors">
                 + Add Song
               </button>
             </div>
@@ -366,12 +366,12 @@ watch(ready, (r) => { if (r) load() }, { immediate: true })
 
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
-                <span class="font-semibold text-slate-900 truncate">{{ song.title }}</span>
+                <span class="font-semibold text-slate-900 truncate text-sm">{{ song.title }}</span>
               </div>
-              <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                <span>{{ song.artist }}</span>
+              <div class="flex items-center gap-2 text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                <span class="truncate">{{ song.artist }}</span>
                 <span class="text-slate-300">|</span>
-                <span>{{ song.submitter_name }}</span>
+                <span class="truncate">{{ song.submitter_name }}</span>
               </div>
             </div>
 

@@ -14,10 +14,12 @@
     -webkit-overflow-scrolling: touch;
     font-size: 15px;
     line-height: 1.5;
+    padding-top: env(safe-area-inset-top, 0px);
   }
   @media (min-width: 1024px) {
     body {
       font-size: 14px;
+      padding-top: 0;
     }
   }
   input, select, textarea, button {
@@ -34,6 +36,9 @@
 }
 
 @layer components {
+  .table-wrap {
+    @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0;
+  }
   .card {
     @apply bg-white rounded-xl border border-slate-200 shadow-sm;
   }
@@ -78,5 +83,38 @@
   }
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 active:scale-[0.97] transition-all min-h-[44px];
+  }
+}
+
+@layer utilities {
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+@media (max-width: 639px) {
+  .card > table,
+  .rounded-xl > table,
+  section > table,
+  div > table {
+    font-size: 12px;
+  }
+  .card > table th,
+  .card > table td,
+  .rounded-xl > table th,
+  .rounded-xl > table td,
+  section > table th,
+  section > table td,
+  div > table th,
+  div > table td {
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+    white-space: nowrap;
+  }
+  .card:has(> table),
+  .rounded-xl:has(> table),
+  div.overflow-hidden:has(> table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }

@@ -18,10 +18,9 @@ async function handleSignOut() {
     <aside class="hidden lg:flex flex-col w-64 bg-white border-r border-slate-200 fixed inset-y-0 left-0 z-30">
       <div class="h-16 flex items-center gap-3 px-5 border-b border-slate-200">
         <NuxtLink to="/" class="flex items-center gap-2.5">
-          <img src="/logo-icon.png" alt="Sycamore" class="w-9 h-9" />
+          <img src="/logo-icon.png" alt="Sycamore Hub" class="w-9 h-9" />
           <div>
-            <div class="font-bold text-slate-900 text-sm leading-tight">Sycamore</div>
-            <div class="text-xs text-slate-500 leading-tight">Information Hub</div>
+            <div class="font-bold text-slate-900 text-sm leading-tight">Sycamore Hub</div>
           </div>
         </NuxtLink>
       </div>
@@ -74,7 +73,7 @@ async function handleSignOut() {
           <div class="h-9 rounded-lg bg-slate-50 animate-pulse" />
         </template>
         </ClientOnly>
-        <div class="text-xs text-slate-400">Sycamore &copy; {{ new Date().getFullYear() }}</div>
+        <div class="text-xs text-slate-400">Sycamore Hub &copy; {{ new Date().getFullYear() }}</div>
       </div>
     </aside>
 
@@ -88,8 +87,8 @@ async function handleSignOut() {
       >
       <div class="h-16 flex items-center justify-between px-4 border-b border-slate-200">
         <div class="flex items-center gap-2.5">
-          <img src="/logo-icon.png" alt="Sycamore" class="w-9 h-9" />
-          <div class="font-bold text-slate-900 text-sm">Sycamore</div>
+          <img src="/logo-icon.png" alt="Sycamore Hub" class="w-9 h-9" />
+          <div class="font-bold text-slate-900 text-sm">Sycamore Hub</div>
         </div>
         <button class="p-2 rounded-lg hover:bg-slate-100" @click="sidebarOpen = false">
           <SidebarIcon name="close" />
@@ -181,7 +180,7 @@ async function handleSignOut() {
           <NotificationsBell v-if="isAuthenticated" />
         </ClientOnly>
       </div>
-      <main class="flex-1 p-4 sm:p-6 lg:p-10 pb-20 lg:pb-10">
+      <main class="flex-1 p-4 sm:p-6 lg:p-10 pb-24 lg:pb-10 safe-main-bottom">
         <slot />
       </main>
     </div>
@@ -204,5 +203,10 @@ async function handleSignOut() {
 }
 .slide-left-enter-from, .slide-left-leave-to {
   transform: translateX(-100%);
+}
+@media (max-width: 1023px) {
+  .safe-main-bottom {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px) + 1rem);
+  }
 }
 </style>

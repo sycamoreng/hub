@@ -422,11 +422,11 @@ onBeforeUnmount(() => { if (tickHandle) cancelAnimationFrame(tickHandle) })
       </article>
     </section>
 
-    <section class="card p-5">
+    <section class="card p-5 overflow-x-auto">
       <h2 class="text-base font-bold text-slate-900 mb-3">Recent runs</h2>
       <div v-if="myRuns.length === 0" class="text-sm text-slate-500">You haven't completed any runs yet.</div>
-      <table v-else class="min-w-full text-sm">
-        <thead class="text-xs uppercase tracking-wide text-slate-500">
+      <table v-else class="min-w-full text-xs sm:text-sm">
+        <thead class="text-[10px] sm:text-xs uppercase tracking-wide text-slate-500">
           <tr>
             <th class="text-left py-2">When</th>
             <th class="text-left py-2">Mode</th>

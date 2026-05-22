@@ -1,6 +1,6 @@
 {
   "name": "Sycamore Hub",
-  "short_name": "Sycamore",
+  "short_name": "Sycamore Hub",
   "description": "Sycamore Information Hub - Your team's central workplace app",
   "start_url": "/",
   "display": "standalone",
