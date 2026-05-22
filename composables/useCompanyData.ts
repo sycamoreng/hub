@@ -16,6 +16,7 @@ export function useCompanyData() {
     const { data, error } = await supabase
       .from('departments')
       .select('*, staff_members!staff_members_department_id_fkey(count), head:staff_members!departments_head_staff_id_fkey(id, full_name, email, role)')
+      .eq('staff_members.is_active', true)
       .order('name')
     if (error) throw error
     return (data ?? []).map((d: any) => ({

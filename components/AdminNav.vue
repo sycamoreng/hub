@@ -26,7 +26,11 @@ const groups: NavGroup[] = [
       { to: '/admin/leave', label: 'Leave', icon: 'calendar', section: 'attendance' },
       { to: '/admin/exits', label: 'Exits', icon: 'arrow-right', section: 'exits' },
       { to: '/admin/performance', label: 'Performance', icon: 'check', section: 'performance' },
-      { to: '/admin/appointments', label: 'Appointments', icon: 'calendar', section: 'appointments' }
+      { to: '/admin/appointments', label: 'Appointments', icon: 'calendar', section: 'appointments' },
+      { to: '/admin/burnout', label: 'Burnout Risk', icon: 'info', section: 'staff' },
+      { to: '/admin/contractors', label: 'Contractors', icon: 'users', section: 'staff' },
+      { to: '/admin/people-analytics', label: 'People Analytics', icon: 'chart', section: 'staff' },
+      { to: '/admin/headcount', label: 'Headcount Planning', icon: 'users', section: 'staff' }
     ]
   },
   {
@@ -54,7 +58,10 @@ const groups: NavGroup[] = [
       { to: '/admin/broadcast', label: 'Broadcast', icon: 'mail', section: 'broadcast' },
       { to: '/admin/chat-spaces', label: 'Chat Spaces', icon: 'chat', section: 'communication' },
       { to: '/admin/raffle', label: "Workers' Day Raffle", icon: 'sparkle', section: 'raffle' },
-      { to: '/admin/gamification', label: 'Gamification', icon: 'star', section: 'gamification' }
+      { to: '/admin/gamification', label: 'Gamification', icon: 'star', section: 'gamification' },
+      { to: '/admin/leadership-qa', label: 'Leadership Q&A', icon: 'chat', section: 'leadership' },
+      { to: '/admin/requests', label: 'Service Requests', icon: 'check', section: 'requests' },
+      { to: '/admin/playlists', label: 'Playlists', icon: 'sparkle', section: 'gamification' }
     ]
   },
   {

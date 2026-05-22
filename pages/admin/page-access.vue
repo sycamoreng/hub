@@ -42,7 +42,15 @@ const pages: PageEntry[] = [
   { path: '/typing', label: 'Typing Sprint', group: 'Rewards & Play' },
   { path: '/dino', label: 'Dino Runner', group: 'Rewards & Play' },
   { path: '/appointments', label: 'Appointments', group: 'Productivity' },
-  { path: '/hmo', label: 'HMO', group: 'People & Culture' }
+  { path: '/hmo', label: 'HMO', group: 'People & Culture' },
+  { path: '/ask-leadership', label: 'Ask Leadership', group: 'Company' },
+  { path: '/celebrations', label: 'Celebrations', group: 'Company' },
+  { path: '/guess-who', label: 'Guess Who', group: 'Rewards & Play' },
+  { path: '/requests', label: 'Service Requests', group: 'Productivity' },
+  { path: '/contractors', label: 'Contractors', group: 'People & Culture' },
+  { path: '/burnout', label: 'Burnout Dashboard', group: 'People & Culture' },
+  { path: '/photos', label: 'Photo Wall', group: 'Social & Fun' },
+  { path: '/playlist', label: 'Playlist of the Week', group: 'Social & Fun' }
 ]
 
 const grouped = computed(() => {

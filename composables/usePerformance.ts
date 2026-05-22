@@ -774,7 +774,24 @@ export function usePerformance() {
     return (data as number) ?? 0
   }
 
+  async function copyObjectivesBetweenCycles(
+    sourceCycleId: string,
+    targetCycleId: string,
+    includeMeasures = true,
+    resetProgress = true
+  ): Promise<number> {
+    const { data, error } = await supabase.rpc('copy_objectives_between_cycles', {
+      p_source_cycle_id: sourceCycleId,
+      p_target_cycle_id: targetCycleId,
+      p_include_measures: includeMeasures,
+      p_reset_progress: resetProgress
+    })
+    if (error) throw error
+    return (data as number) ?? 0
+  }
+
   return {
+    copyObjectivesBetweenCycles,
     loadObjectiveTemplates,
     saveObjectiveTemplate,
     deleteObjectiveTemplate,

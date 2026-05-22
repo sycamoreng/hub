@@ -5,9 +5,31 @@
 @layer base {
   html {
     font-family: 'Satoshi', system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
   body {
     @apply bg-slate-50 text-slate-800 antialiased;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  @media (min-width: 1024px) {
+    body {
+      font-size: 14px;
+    }
+  }
+  input, select, textarea, button {
+    font-size: 16px;
+  }
+  @media (min-width: 1024px) {
+    input, select, textarea, button {
+      font-size: inherit;
+    }
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
   }
 }
 
@@ -37,24 +59,24 @@
     @apply bg-blue-50 text-blue-700 border border-blue-200;
   }
   .nav-link {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-sycamore-700;
+    @apply flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-lg text-[15px] sm:text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-sycamore-700;
   }
   .nav-link-active {
     @apply bg-sycamore-50 text-sycamore-700;
   }
   .section-title {
-    @apply text-2xl font-bold text-slate-900 tracking-tight;
+    @apply text-xl sm:text-2xl font-bold text-slate-900 tracking-tight;
   }
   .section-subtitle {
-    @apply text-sm text-slate-500 mt-1;
+    @apply text-[13px] sm:text-sm text-slate-500 mt-0.5;
   }
   .input {
-    @apply w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-sycamore-400 focus:ring-2 focus:ring-sycamore-100;
+    @apply w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-sycamore-400 focus:ring-2 focus:ring-sycamore-100 min-h-[44px];
   }
   .btn-primary {
-    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sycamore-600 text-white text-sm font-medium hover:bg-sycamore-700 transition-colors;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-sycamore-600 text-white text-sm font-medium hover:bg-sycamore-700 active:scale-[0.97] transition-all min-h-[44px];
   }
   .btn-secondary {
-    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 active:scale-[0.97] transition-all min-h-[44px];
   }
 }

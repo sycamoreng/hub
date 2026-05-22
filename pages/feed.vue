@@ -232,19 +232,19 @@ definePageMeta({ title: 'Feed' })
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto space-y-6">
+  <div class="max-w-3xl mx-auto space-y-4 sm:space-y-6">
     <header>
       <h1 class="section-title">Company Feed</h1>
       <p class="section-subtitle">Announcements from the company and posts from your colleagues.</p>
     </header>
 
     <ClientOnly>
-      <div v-if="isAuthenticated" class="card p-5">
+      <div v-if="isAuthenticated" class="card p-3.5 sm:p-5">
         <MentionTextarea
           v-model="composer"
-          :rows="3"
+          :rows="2"
           :maxlength="4000"
-          placeholder="Share something with the team... use @ to mention a colleague"
+          placeholder="Share something with the team..."
         />
         <div v-if="composerKind !== 'standard'" class="mt-3 flex items-center gap-2 text-xs">
           <span class="badge badge-green capitalize">{{ composerKind }}</span>
@@ -259,20 +259,20 @@ definePageMeta({ title: 'Feed' })
           <input v-model="composerImage" class="input" placeholder="https://... paste an image URL to attach" />
         </div>
 
-        <div class="flex items-center justify-between gap-3 mt-3">
+        <div class="flex items-center justify-between gap-2 sm:gap-3 mt-3">
           <div class="flex items-center gap-2">
             <button
               type="button"
-              class="btn-secondary text-xs inline-flex items-center gap-1"
+              class="btn-secondary !text-xs !px-2.5 sm:!px-4 inline-flex items-center gap-1"
               @click="templatePickerOpen = true"
             >
-              <SidebarIcon name="sparkle" /> Template
+              <SidebarIcon name="sparkle" /> <span class="hidden sm:inline">Template</span>
             </button>
           </div>
           <div class="text-xs text-slate-400 hidden sm:block">{{ composer.length }} / 4000 &middot; type @ to mention</div>
           <button
             type="button"
-            class="btn-primary"
+            class="btn-primary !px-4 sm:!px-5"
             :disabled="submitting || !composer.trim()"
             @click="submitPost"
           >
@@ -292,11 +292,11 @@ definePageMeta({ title: 'Feed' })
     <div v-if="loading" class="text-sm text-slate-400">Loading feed...</div>
 
     <template v-else>
-      <section v-if="announcements.length" class="space-y-4">
+      <section v-if="announcements.length" class="space-y-3 sm:space-y-4">
         <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Announcements</h2>
         <article v-for="a in announcements" :key="a.id" class="card overflow-hidden">
           <figure v-if="a.image_url" class="relative">
-            <img :src="a.image_url" :alt="a.title" class="w-full h-56 sm:h-72 object-cover" />
+            <img :src="a.image_url" :alt="a.title" class="w-full h-44 sm:h-72 object-cover" />
             <div class="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/10 to-transparent" />
             <span :class="[
               'absolute top-4 left-4 badge',
@@ -307,7 +307,7 @@ definePageMeta({ title: 'Feed' })
               <p v-if="a.summary" class="text-sm text-white/90 mt-1 line-clamp-2">{{ a.summary }}</p>
             </div>
           </figure>
-          <div class="p-5">
+          <div class="p-4 sm:p-5">
             <div v-if="!a.image_url" class="flex items-center gap-2 mb-2">
               <span :class="[
                 'badge',
@@ -337,7 +337,7 @@ definePageMeta({ title: 'Feed' })
         </article>
       </section>
 
-      <section class="space-y-3">
+      <section class="space-y-2.5 sm:space-y-3">
         <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Posts</h2>
         <p v-if="posts.length === 0" class="text-sm text-slate-400">No posts yet. Be the first to share something.</p>
         <PostCard

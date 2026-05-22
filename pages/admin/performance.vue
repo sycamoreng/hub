@@ -36,7 +36,8 @@ const {
   loadObjectives, loadMeasures, saveObjective, deleteObjective, saveMeasure, deleteMeasure,
   loadReviews, saveReview, deleteReview,
   loadRecognitions, saveRecognition, deleteRecognition,
-  loadPips, savePip, deletePip, loadPipCheckins, saveCheckin, deleteCheckin
+  loadPips, savePip, deletePip, loadPipCheckins, saveCheckin, deleteCheckin,
+  copyObjectivesBetweenCycles
 } = usePerformance()
 
 const tab = ref<'dashboard' | 'cycles' | 'frameworks' | 'objectives' | 'appraisals' | 'calibration' | 'templates' | 'values' | 'reviews' | 'recognitions' | 'pips'>('dashboard')
@@ -58,6 +59,12 @@ const bulkUploading = ref(false)
 const editingCycle = ref<Partial<PerformanceCycle> | null>(null)
 const editingFramework = ref<Partial<PerformanceFramework> | null>(null)
 const editingObjective = ref<(Partial<PerformanceObjective> & { _measures?: Partial<PerformanceMeasure>[] }) | null>(null)
+
+const showCopyObjectives = ref(false)
+const copySourceCycleId = ref('')
+const copyIncludeMeasures = ref(true)
+const copyResetProgress = ref(true)
+const copyingObjectives = ref(false)
 
 const reviews = ref<any[]>([])
 const reviewStatusFilter = ref<string>('')
@@ -306,6 +313,42 @@ async function markPrimary(c: PerformanceCycle) {
     await loadAll()
   } catch (e: any) {
     toast.push({ type: 'error', title: 'Could not update', message: e?.message ?? 'Unexpected error' })
+  }
+}
+
+function openCopyObjectives() {
+  if (!selectedCycleId.value) {
+    toast.push({ type: 'error', title: 'Select a target cycle', message: 'Choose the cycle you want to copy objectives into.' })
+    return
+  }
+  copySourceCycleId.value = ''
+  copyIncludeMeasures.value = true
+  copyResetProgress.value = true
+  showCopyObjectives.value = true
+}
+
+async function submitCopyObjectives() {
+  if (!copySourceCycleId.value || !selectedCycleId.value) return
+  if (copySourceCycleId.value === selectedCycleId.value) {
+    toast.push({ type: 'error', title: 'Same cycle', message: 'Source and target must be different cycles.' })
+    return
+  }
+  copyingObjectives.value = true
+  try {
+    const count = await copyObjectivesBetweenCycles(
+      copySourceCycleId.value,
+      selectedCycleId.value,
+      copyIncludeMeasures.value,
+      copyResetProgress.value
+    )
+    auditLog({ action: 'copy_objectives', target_type: 'performance_cycle', target_id: selectedCycleId.value, target_label: `Copied ${count} objectives` })
+    toast.push({ type: 'success', title: 'Objectives copied', message: `${count} objective(s) copied to current cycle.` })
+    showCopyObjectives.value = false
+    await reloadObjectives()
+  } catch (e: any) {
+    toast.push({ type: 'error', title: 'Copy failed', message: e?.message ?? 'Unexpected error' })
+  } finally {
+    copyingObjectives.value = false
   }
 }
 
@@ -1114,6 +1157,7 @@ const ratingDistribution = computed(() => {
             Selected cycle is <span class="font-semibold">{{ selectedCycle.status }}</span>. Staff can edit their own progress when status is planning, active, or in_review.
           </div>
           <div class="flex flex-wrap gap-2 ml-auto">
+            <button class="btn-secondary text-xs" :disabled="!selectedCycleId" @click="openCopyObjectives">Copy from cycle</button>
             <button class="btn-secondary text-xs" :disabled="!objectives.length" @click="exportObjectivesCsv">Export CSV</button>
             <button class="btn-secondary text-xs" :disabled="!selectedCycleId" @click="showBulkUpload = true">Bulk upload</button>
             <button class="btn-primary text-xs" :disabled="!selectedCycleId" @click="startNewObjective">New objective</button>
@@ -1775,6 +1819,38 @@ const ratingDistribution = computed(() => {
     </div>
 
     <!-- Bulk objective upload modal ------------------------------------ -->
+    <!-- Copy objectives modal ----------------------------------------- -->
+    <div v-if="showCopyObjectives" class="fixed inset-0 bg-slate-900/40 z-40 flex items-center justify-center p-4" @click.self="showCopyObjectives = false">
+      <div class="bg-white rounded-xl max-w-md w-full p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-slate-900">Copy objectives from another cycle</h3>
+          <button class="text-slate-400 hover:text-slate-600" @click="showCopyObjectives = false">Close</button>
+        </div>
+        <p class="text-xs text-slate-500">This will copy all objectives (and optionally their measures) from the source cycle into the currently selected cycle.</p>
+        <label class="block">
+          <span class="text-xs font-medium text-slate-600 mb-1 block">Source cycle</span>
+          <select v-model="copySourceCycleId" class="input">
+            <option value="">Select source cycle</option>
+            <option v-for="c in cycles.filter(x => x.id !== selectedCycleId)" :key="c.id" :value="c.id">{{ c.name }} ({{ c.status }})</option>
+          </select>
+        </label>
+        <label class="flex items-center gap-2">
+          <input v-model="copyIncludeMeasures" type="checkbox" class="rounded border-slate-300 text-sycamore-600 focus:ring-sycamore-500" />
+          <span class="text-sm text-slate-700">Include key results / measures</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input v-model="copyResetProgress" type="checkbox" class="rounded border-slate-300 text-sycamore-600 focus:ring-sycamore-500" />
+          <span class="text-sm text-slate-700">Reset progress and status to draft</span>
+        </label>
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <button class="btn-secondary" @click="showCopyObjectives = false">Cancel</button>
+          <button class="btn-primary" :disabled="copyingObjectives || !copySourceCycleId" @click="submitCopyObjectives">
+            {{ copyingObjectives ? 'Copying...' : 'Copy objectives' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="showBulkUpload" class="fixed inset-0 bg-slate-900/40 z-40 flex items-center justify-center p-4" @click.self="showBulkUpload = false">
       <div class="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
         <div class="flex items-center justify-between">

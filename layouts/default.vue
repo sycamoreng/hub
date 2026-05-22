@@ -78,11 +78,14 @@ async function handleSignOut() {
       </div>
     </aside>
 
-    <div v-if="sidebarOpen" class="lg:hidden fixed inset-0 bg-slate-900/50 z-40" @click="sidebarOpen = false" />
-    <aside
-      v-if="sidebarOpen"
-      class="lg:hidden fixed inset-y-0 left-0 w-64 bg-white z-50 flex flex-col"
-    >
+    <Transition name="fade">
+      <div v-if="sidebarOpen" class="lg:hidden fixed inset-0 bg-slate-900/50 z-40 backdrop-blur-sm" @click="sidebarOpen = false" />
+    </Transition>
+    <Transition name="slide-left">
+      <aside
+        v-if="sidebarOpen"
+        class="lg:hidden fixed inset-y-0 left-0 w-72 bg-white z-50 flex flex-col shadow-2xl"
+      >
       <div class="h-16 flex items-center justify-between px-4 border-b border-slate-200">
         <div class="flex items-center gap-2.5">
           <img src="/logo-icon.png" alt="Sycamore" class="w-9 h-9" />
@@ -140,9 +143,10 @@ async function handleSignOut() {
         </ClientOnly>
       </div>
     </aside>
+    </Transition>
 
     <div class="flex-1 lg:ml-64 flex flex-col min-w-0">
-      <header class="lg:hidden sticky top-0 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-20">
+      <header class="lg:hidden sticky top-0 h-16 bg-white/95 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 z-20">
         <div class="flex items-center gap-2.5">
           <img src="/logo-icon.png" alt="Sycamore" class="w-8 h-8" />
           <span class="font-bold text-slate-900 text-sm">Sycamore Hub</span>
@@ -177,12 +181,28 @@ async function handleSignOut() {
           <NotificationsBell v-if="isAuthenticated" />
         </ClientOnly>
       </div>
-      <main class="flex-1 p-4 sm:p-6 lg:p-10">
+      <main class="flex-1 p-4 sm:p-6 lg:p-10 pb-20 lg:pb-10">
         <slot />
       </main>
     </div>
     <ClientOnly>
+      <MobileBottomNav />
       <ChatWidget />
     </ClientOnly>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+.slide-left-enter-active, .slide-left-leave-active {
+  transition: transform 0.25s ease;
+}
+.slide-left-enter-from, .slide-left-leave-to {
+  transform: translateX(-100%);
+}
+</style>

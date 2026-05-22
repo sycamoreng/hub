@@ -33,6 +33,30 @@ const form = ref({
   handover_notes: ''
 })
 const saving = ref(false)
+const handoverFile = ref<File | null>(null)
+const uploadingFile = ref(false)
+
+function onHandoverFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  handoverFile.value = input.files?.[0] ?? null
+}
+
+async function uploadHandoverFile(leaveRequestId: string): Promise<string | null> {
+  if (!handoverFile.value || !user.value) return null
+  uploadingFile.value = true
+  try {
+    const ext = handoverFile.value.name.split('.').pop() ?? 'pdf'
+    const path = `leave-handover/${leaveRequestId}.${ext}`
+    const { error } = await supabase.storage.from('uploads').upload(path, handoverFile.value, { upsert: true })
+    if (error) throw error
+    const { data } = supabase.storage.from('uploads').getPublicUrl(path)
+    return data.publicUrl
+  } catch {
+    return null
+  } finally {
+    uploadingFile.value = false
+  }
+}
 
 const computedDays = computed(() => {
   if (!form.value.leave_type_id || !form.value.start_date || !form.value.end_date) return 0
@@ -145,6 +169,13 @@ async function submit() {
       .maybeSingle()
     if (error) throw error
 
+    if (handoverFile.value && inserted) {
+      const fileUrl = await uploadHandoverFile((inserted as any).id)
+      if (fileUrl) {
+        await supabase.from('leave_requests').update({ handover_file_url: fileUrl }).eq('id', (inserted as any).id)
+      }
+    }
+
     try {
       const { data: subj } = await supabase
         .from('staff_members')
@@ -219,6 +250,7 @@ async function submit() {
       relief_officer_id: '',
       handover_notes: ''
     }
+    handoverFile.value = null
     await load()
     void inserted
   } catch (e: any) {
@@ -398,6 +430,20 @@ const upcomingHolidays = computed(() => {
                 <span class="text-xs font-medium text-slate-600">Handover notes</span>
                 <textarea v-model="form.handover_notes" rows="4" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Outstanding tasks, deadlines, key contacts, where files live, recurring check-ins, etc."></textarea>
               </label>
+              <label class="block sm:col-span-2">
+                <span class="text-xs font-medium text-slate-600">Handover document (optional)</span>
+                <div class="mt-1 flex items-center gap-3">
+                  <label class="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-700 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-slate-400">
+                      <path fill-rule="evenodd" d="M15.621 4.379a3 3 0 0 0-4.242 0l-7 7a3 3 0 0 0 4.241 4.243h.001l.497-.5a.75.75 0 0 1 1.064 1.057l-.498.501a4.5 4.5 0 0 1-6.364-6.364l7-7a4.5 4.5 0 0 1 6.368 6.36l-3.455 3.553A2.625 2.625 0 1 1 9.52 9.52l3.45-3.451a.75.75 0 1 1 1.061 1.06l-3.45 3.451a1.125 1.125 0 0 0 1.587 1.595l3.454-3.553a3 3 0 0 0 0-4.242Z" clip-rule="evenodd" />
+                    </svg>
+                    {{ handoverFile ? 'Change file' : 'Attach file' }}
+                    <input type="file" class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.ppt,.pptx,.zip" @change="onHandoverFileChange">
+                  </label>
+                  <span v-if="handoverFile" class="text-xs text-slate-600 truncate max-w-[200px]">{{ handoverFile.name }}</span>
+                </div>
+                <span class="text-xs text-slate-400 mt-1 block">Upload a document with tasks, instructions or handover details. PDF, Word, Excel accepted.</span>
+              </label>
             </div>
           </div>
 
@@ -463,6 +509,12 @@ const upcomingHolidays = computed(() => {
                 {{ r.start_date }} &rarr; {{ r.end_date }} &middot; <span class="tabular-nums">{{ r.working_days }}</span> day(s)
               </div>
               <p v-if="r.handover_notes" class="text-sm text-slate-600 mt-2 whitespace-pre-wrap"><span class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Handover</span><br>{{ r.handover_notes }}</p>
+              <a v-if="r.handover_file_url" :href="r.handover_file_url" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 text-sm text-sycamore-700 hover:text-sycamore-800 font-medium mt-2">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                  <path fill-rule="evenodd" d="M15.621 4.379a3 3 0 0 0-4.242 0l-7 7a3 3 0 0 0 4.241 4.243h.001l.497-.5a.75.75 0 0 1 1.064 1.057l-.498.501a4.5 4.5 0 0 1-6.364-6.364l7-7a4.5 4.5 0 0 1 6.368 6.36l-3.455 3.553A2.625 2.625 0 1 1 9.52 9.52l3.45-3.451a.75.75 0 1 1 1.061 1.06l-3.45 3.451a1.125 1.125 0 0 0 1.587 1.595l3.454-3.553a3 3 0 0 0 0-4.242Z" clip-rule="evenodd" />
+                </svg>
+                View handover document
+              </a>
               <p v-if="r.reason" class="text-xs text-slate-500 mt-2">Reason: {{ r.reason }}</p>
             </div>
             <div class="flex gap-2 shrink-0">
@@ -513,7 +565,7 @@ const upcomingHolidays = computed(() => {
                 <span v-else class="text-xs text-slate-400">—</span>
               </td>
               <td class="px-5 py-3 text-right whitespace-nowrap space-x-3">
-                <button v-if="r.handover_notes || r.relief_officer_id" type="button" @click="toggleExpand(r.id)" class="text-xs font-semibold text-sycamore-700">{{ expanded[r.id] ? 'Hide' : 'Details' }}</button>
+                <button v-if="r.handover_notes || r.handover_file_url || r.relief_officer_id" type="button" @click="toggleExpand(r.id)" class="text-xs font-semibold text-sycamore-700">{{ expanded[r.id] ? 'Hide' : 'Details' }}</button>
                 <button v-if="r.status === 'pending'" type="button" @click="cancel(r)" class="text-rose-600 font-medium text-xs">Cancel</button>
               </td>
             </tr>
@@ -522,6 +574,15 @@ const upcomingHolidays = computed(() => {
                 <div v-if="r.handover_notes">
                   <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Handover notes</div>
                   <p class="whitespace-pre-wrap">{{ r.handover_notes }}</p>
+                </div>
+                <div v-if="r.handover_file_url">
+                  <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Handover document</div>
+                  <a :href="r.handover_file_url" target="_blank" rel="noopener" class="inline-flex items-center gap-2 text-sm text-sycamore-700 hover:text-sycamore-800 font-medium">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                      <path fill-rule="evenodd" d="M15.621 4.379a3 3 0 0 0-4.242 0l-7 7a3 3 0 0 0 4.241 4.243h.001l.497-.5a.75.75 0 0 1 1.064 1.057l-.498.501a4.5 4.5 0 0 1-6.364-6.364l7-7a4.5 4.5 0 0 1 6.368 6.36l-3.455 3.553A2.625 2.625 0 1 1 9.52 9.52l3.45-3.451a.75.75 0 1 1 1.061 1.06l-3.45 3.451a1.125 1.125 0 0 0 1.587 1.595l3.454-3.553a3 3 0 0 0 0-4.242Z" clip-rule="evenodd" />
+                    </svg>
+                    View handover document
+                  </a>
                 </div>
                 <div v-if="r.relief_response_notes">
                   <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Relief response</div>

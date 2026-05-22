@@ -62,7 +62,8 @@ const baseGroups = computed<NavGroup[]>(() => [
       { to: '/departments', label: 'Departments', icon: 'building' },
       { to: '/locations', label: 'Locations', icon: 'map' },
       { to: '/staff', label: 'Staff Directory', icon: 'users' },
-      { to: '/celebrations', label: 'Celebrations', icon: 'sparkle' }
+      { to: '/celebrations', label: 'Celebrations', icon: 'sparkle' },
+      { to: '/ask-leadership', label: 'Ask Leadership', icon: 'chat' }
     ]
   },
   {
@@ -71,7 +72,8 @@ const baseGroups = computed<NavGroup[]>(() => [
     icon: 'sparkle',
     items: [
       { to: '/tools', label: 'Tools', icon: 'gift' },
-      { to: '/onboarding', label: 'Learning', icon: 'check' }
+      { to: '/onboarding', label: 'Learning', icon: 'check' },
+      { to: '/requests', label: 'Service Requests', icon: 'check' }
     ]
   },
   {
@@ -97,6 +99,15 @@ const baseGroups = computed<NavGroup[]>(() => [
       { to: '/leave', label: 'Leave', icon: 'calendar' },
       { to: '/performance', label: 'Performance', icon: 'check' },
       { to: '/exit', label: 'Exit', icon: 'arrow-right' }
+    ]
+  },
+  {
+    id: 'social',
+    label: 'Social & Fun',
+    icon: 'sparkle',
+    items: [
+      { to: '/photos', label: 'Photo Wall', icon: 'palette' },
+      { to: '/playlist', label: 'Playlist of the Week', icon: 'sparkle' }
     ]
   },
   {

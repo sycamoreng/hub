@@ -96,30 +96,30 @@ function avatar(s: any): string | null {
 
 <template>
   <div class="max-w-7xl mx-auto">
-    <div class="mb-8">
+    <div class="mb-5 sm:mb-8">
       <h1 class="section-title">Staff Directory</h1>
       <p class="section-subtitle">Meet the people who make Sycamore thrive.</p>
     </div>
 
-    <div class="flex gap-1 bg-slate-100 rounded-lg p-1 mb-4 w-fit">
+    <div class="flex gap-1 bg-slate-100 rounded-lg p-1 mb-4 w-full sm:w-fit overflow-x-auto">
       <button type="button" @click="view = 'active'"
-        class="text-xs font-semibold px-3 py-1.5 rounded-md"
+        class="text-xs font-semibold px-3 py-2 sm:py-1.5 rounded-md flex-1 sm:flex-none whitespace-nowrap"
         :class="view === 'active' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'">
         Active <span class="ml-1 text-slate-400">{{ staff.length }}</span>
       </button>
       <button type="button" @click="view = 'new_hires'"
-        class="text-xs font-semibold px-3 py-1.5 rounded-md"
+        class="text-xs font-semibold px-3 py-2 sm:py-1.5 rounded-md flex-1 sm:flex-none whitespace-nowrap"
         :class="view === 'new_hires' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'">
         New Hires <span class="ml-1 text-slate-400">{{ newHires.length }}</span>
       </button>
       <button type="button" @click="view = 'exited'"
-        class="text-xs font-semibold px-3 py-1.5 rounded-md"
+        class="text-xs font-semibold px-3 py-2 sm:py-1.5 rounded-md flex-1 sm:flex-none whitespace-nowrap"
         :class="view === 'exited' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'">
         Exited <span class="ml-1 text-slate-400">{{ exited.length }}</span>
       </button>
     </div>
 
-    <div class="card p-4 mb-6 flex flex-col sm:flex-row gap-3">
+    <div class="card p-3 sm:p-4 mb-5 sm:mb-6 flex flex-col sm:flex-row gap-3">
       <div class="relative flex-1">
         <input v-model="search" type="text" placeholder="Search by name, role, or email..." class="input pl-10" />
         <div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><SidebarIcon name="search" /></div>
@@ -134,7 +134,47 @@ function avatar(s: any): string | null {
 
     <template v-else-if="view === 'active'">
     <div v-if="filtered.length === 0" class="text-slate-400">No staff match your filters.</div>
-    <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+    <!-- Mobile: contact list style -->
+    <div class="sm:hidden divide-y divide-slate-100">
+      <NuxtLink
+        v-for="s in filtered"
+        :key="s.id"
+        :to="`/profile/${s.id}`"
+        class="flex items-center gap-3 py-3 px-1 active:bg-slate-50 transition-colors"
+      >
+        <div class="relative flex-shrink-0">
+          <img
+            v-if="avatar(s)"
+            :src="avatar(s)!"
+            :alt="s.full_name"
+            referrerpolicy="no-referrer"
+            class="w-12 h-12 rounded-full object-cover border border-slate-200"
+          />
+          <div v-else class="w-12 h-12 rounded-full bg-gradient-to-br from-sycamore-400 to-sycamore-700 text-white flex items-center justify-center font-bold text-base">
+            {{ initials(s.full_name) }}
+          </div>
+          <span
+            v-if="s.auth_user_id"
+            class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white"
+          />
+        </div>
+        <div class="min-w-0 flex-1">
+          <h3 class="font-semibold text-[15px] text-slate-900 truncate leading-tight">{{ s.full_name }}</h3>
+          <div class="text-[13px] text-slate-500 truncate mt-0.5">{{ s.role }}</div>
+          <div class="flex items-center gap-2 mt-1">
+            <span v-if="s.departments?.name" class="text-[11px] font-medium text-leaf-700 bg-leaf-50 px-1.5 py-0.5 rounded">{{ s.departments.name }}</span>
+            <span v-if="s.locations" class="text-[11px] text-slate-400">{{ s.locations.city }}</span>
+          </div>
+        </div>
+        <div class="text-slate-300 flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" /></svg>
+        </div>
+      </NuxtLink>
+    </div>
+
+    <!-- Desktop: grid cards -->
+    <div class="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <NuxtLink v-for="s in filtered" :key="s.id" :to="`/profile/${s.id}`" class="card card-hover p-5 flex gap-4">
         <div class="relative flex-shrink-0">
           <img
@@ -170,7 +210,41 @@ function avatar(s: any): string | null {
 
     <template v-else-if="view === 'new_hires'">
       <div v-if="filteredNewHires.length === 0" class="text-slate-400">No new hires in the last 90 days.</div>
-      <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+      <!-- Mobile: list style -->
+      <div class="sm:hidden divide-y divide-slate-100">
+        <NuxtLink
+          v-for="s in filteredNewHires"
+          :key="s.id"
+          :to="`/profile/${s.id}`"
+          class="flex items-center gap-3 py-3 px-1 active:bg-slate-50 transition-colors"
+        >
+          <div class="relative flex-shrink-0">
+            <img
+              v-if="avatar(s)"
+              :src="avatar(s)!"
+              :alt="s.full_name"
+              referrerpolicy="no-referrer"
+              class="w-12 h-12 rounded-full object-cover border border-slate-200"
+            />
+            <div v-else class="w-12 h-12 rounded-full bg-gradient-to-br from-sycamore-400 to-sycamore-700 text-white flex items-center justify-center font-bold text-base">
+              {{ initials(s.full_name) }}
+            </div>
+            <span class="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-sycamore-500 ring-2 ring-white flex items-center justify-center text-[8px] text-white font-bold">N</span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h3 class="font-semibold text-[15px] text-slate-900 truncate leading-tight">{{ s.full_name }}</h3>
+            <div class="text-[13px] text-slate-500 truncate mt-0.5">{{ s.role }}</div>
+            <div class="text-[11px] text-slate-400 mt-1">Joined {{ fmtDate(s.joined_date) }}</div>
+          </div>
+          <div class="text-slate-300 flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" /></svg>
+          </div>
+        </NuxtLink>
+      </div>
+
+      <!-- Desktop: grid -->
+      <div class="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <NuxtLink v-for="s in filteredNewHires" :key="s.id" :to="`/profile/${s.id}`" class="card card-hover p-5 flex gap-4 relative overflow-hidden">
           <div class="absolute top-0 right-0 bg-sycamore-100 text-sycamore-700 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-bl-lg">New</div>
           <div class="relative flex-shrink-0">
@@ -199,7 +273,29 @@ function avatar(s: any): string | null {
 
     <template v-else>
       <div v-if="filteredExited.length === 0" class="text-slate-400">No exited staff records.</div>
-      <div v-else class="card overflow-hidden">
+
+      <!-- Mobile: list style for exited -->
+      <div class="sm:hidden divide-y divide-slate-100">
+        <div v-for="s in filteredExited" :key="s.id" class="py-3 px-1">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+              {{ s.full_name?.split(' ').map((p: string) => p[0]).slice(0,2).join('').toUpperCase() }}
+            </div>
+            <div class="min-w-0 flex-1">
+              <h3 class="font-semibold text-[15px] text-slate-900 truncate leading-tight">{{ s.full_name }}</h3>
+              <div class="text-[13px] text-slate-500 truncate">{{ s.role || '—' }}</div>
+            </div>
+          </div>
+          <div class="ml-13 mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400">
+            <span v-if="s.department_name">{{ s.department_name }}</span>
+            <span>Joined {{ fmtDate(s.joined_date) }}</span>
+            <span>Exited {{ fmtDate(s.exit_effective_date) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desktop: table -->
+      <div class="hidden sm:block card overflow-hidden">
         <table class="w-full text-sm">
           <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
             <tr>

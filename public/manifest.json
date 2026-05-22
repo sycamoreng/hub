@@ -1,0 +1,25 @@
+{
+  "name": "Sycamore Hub",
+  "short_name": "Sycamore",
+  "description": "Sycamore Information Hub - Your team's central workplace app",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a445c",
+  "theme_color": "#1f6f9c",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "productivity"]
+}

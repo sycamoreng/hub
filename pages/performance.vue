@@ -496,6 +496,24 @@ function statusBadge(status: string) {
   return map[status] ?? 'badge-slate'
 }
 
+function categoryStyle(cat: string) {
+  const styles: Record<string, { border: string; bg: string; text: string; dot: string }> = {
+    company: { border: 'border-l-sycamore-500', bg: 'bg-sycamore-50/30', text: 'text-sycamore-700', dot: 'bg-sycamore-500' },
+    team: { border: 'border-l-amber-400', bg: 'bg-amber-50/30', text: 'text-amber-700', dot: 'bg-amber-400' },
+    business: { border: 'border-l-sky-400', bg: 'bg-sky-50/30', text: 'text-sky-700', dot: 'bg-sky-400' },
+    personal: { border: 'border-l-leaf-400', bg: 'bg-leaf-50/30', text: 'text-leaf-700', dot: 'bg-leaf-400' },
+    stretch: { border: 'border-l-rose-400', bg: 'bg-rose-50/30', text: 'text-rose-700', dot: 'bg-rose-400' }
+  }
+  return styles[cat] ?? styles.business
+}
+
+function progressColor(progress: number) {
+  if (progress >= 75) return 'bg-leaf-500'
+  if (progress >= 50) return 'bg-sycamore-500'
+  if (progress >= 25) return 'bg-amber-400'
+  return 'bg-slate-300'
+}
+
 async function ensureColleagues() {
   if (colleagueOptions.value.length) return
   const { data } = await supabase
@@ -731,45 +749,48 @@ function cycleObjectiveProgress(staffId: string) {
           </div>
         </div>
 
-        <article v-if="myAppraisal" class="card p-5 sm:p-6">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h3 class="text-base font-semibold text-slate-900">Your appraisal</h3>
-              <p class="text-xs text-slate-500 mt-0.5">
-                Status:
-                <span class="font-medium text-slate-700">{{ myAppraisal.status.replace('_', ' ') }}</span>
-                <template v-if="myAppraisal.appraiser">
-                  · Appraiser: <span class="font-medium text-slate-700">{{ myAppraisal.appraiser.full_name }}</span>
-                </template>
-              </p>
+        <article v-if="myAppraisal" class="card overflow-hidden">
+          <div class="h-1.5 bg-gradient-to-r from-sycamore-500 via-leaf-400 to-amber-400" />
+          <div class="p-5 sm:p-6">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 class="text-base font-semibold text-slate-900">Your appraisal</h3>
+                <p class="text-xs text-slate-500 mt-0.5">
+                  Status:
+                  <span class="font-medium text-slate-700">{{ myAppraisal.status.replace('_', ' ') }}</span>
+                  <template v-if="myAppraisal.appraiser">
+                    · Appraiser: <span class="font-medium text-slate-700">{{ myAppraisal.appraiser.full_name }}</span>
+                  </template>
+                </p>
+              </div>
+              <div v-if="myAppraisal.rating_label" class="text-right">
+                <div class="text-[11px] uppercase tracking-wide text-slate-400">Rating</div>
+                <div class="text-lg font-bold text-sycamore-700">{{ myAppraisal.rating_label }}</div>
+                <div v-if="myAppraisal.rating_tag" class="text-xs text-slate-500">{{ myAppraisal.rating_tag }}</div>
+              </div>
             </div>
-            <div v-if="myAppraisal.rating_label" class="text-right">
-              <div class="text-[11px] uppercase tracking-wide text-slate-400">Rating</div>
-              <div class="text-base font-bold text-sycamore-700">{{ myAppraisal.rating_label }}</div>
-              <div v-if="myAppraisal.rating_tag" class="text-xs text-slate-500">{{ myAppraisal.rating_tag }}</div>
+            <div class="grid grid-cols-3 gap-3 mt-4">
+              <div class="rounded-xl border border-sycamore-200 bg-sycamore-50/50 p-3">
+                <div class="text-[11px] uppercase tracking-wide text-sycamore-600 font-semibold">Objective</div>
+                <div class="text-xl font-bold text-sycamore-900 mt-0.5">{{ Number(myAppraisal.objective_score).toFixed(2) }}</div>
+                <div class="text-[11px] text-sycamore-600/70">weight {{ Number(myAppraisal.objective_weight).toFixed(0) }}%</div>
+              </div>
+              <div class="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                <div class="text-[11px] uppercase tracking-wide text-amber-600 font-semibold">Behavioural</div>
+                <div class="text-xl font-bold text-amber-900 mt-0.5">{{ Number(myAppraisal.behavioural_score).toFixed(2) }}</div>
+                <div class="text-[11px] text-amber-600/70">weight {{ Number(myAppraisal.behavioural_weight).toFixed(0) }}%</div>
+              </div>
+              <div class="rounded-xl border border-leaf-200 bg-leaf-50/50 p-3">
+                <div class="text-[11px] uppercase tracking-wide text-leaf-600 font-semibold">Final</div>
+                <div class="text-xl font-bold text-leaf-900 mt-0.5">{{ Number(myAppraisal.final_score).toFixed(2) }}</div>
+                <div class="text-[11px] text-leaf-600/70">out of 5.00</div>
+              </div>
             </div>
+            <div v-if="myAppraisal.nine_box_position" class="mt-3 text-xs text-slate-500">
+              9-Box: <span class="font-medium text-slate-700">{{ myAppraisal.nine_box_position }}</span>
+            </div>
+            <p v-if="myAppraisal.notes" class="mt-3 text-sm text-slate-600 whitespace-pre-line border-t border-slate-100 pt-3">{{ myAppraisal.notes }}</p>
           </div>
-          <div class="grid grid-cols-3 gap-3 mt-4">
-            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div class="text-[11px] uppercase tracking-wide text-slate-500">Objective</div>
-              <div class="text-xl font-bold text-slate-900">{{ Number(myAppraisal.objective_score).toFixed(2) }}</div>
-              <div class="text-[11px] text-slate-400">weight {{ Number(myAppraisal.objective_weight).toFixed(0) }}%</div>
-            </div>
-            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div class="text-[11px] uppercase tracking-wide text-slate-500">Behavioural</div>
-              <div class="text-xl font-bold text-slate-900">{{ Number(myAppraisal.behavioural_score).toFixed(2) }}</div>
-              <div class="text-[11px] text-slate-400">weight {{ Number(myAppraisal.behavioural_weight).toFixed(0) }}%</div>
-            </div>
-            <div class="rounded-xl border border-sycamore-200 bg-sycamore-50 p-3">
-              <div class="text-[11px] uppercase tracking-wide text-sycamore-700">Final</div>
-              <div class="text-xl font-bold text-sycamore-900">{{ Number(myAppraisal.final_score).toFixed(2) }}</div>
-              <div class="text-[11px] text-sycamore-700">out of 5.00</div>
-            </div>
-          </div>
-          <div v-if="myAppraisal.nine_box_position" class="mt-3 text-xs text-slate-500">
-            9-Box: <span class="font-medium text-slate-700">{{ myAppraisal.nine_box_position }}</span>
-          </div>
-          <p v-if="myAppraisal.notes" class="mt-3 text-sm text-slate-600 whitespace-pre-line border-t border-slate-100 pt-3">{{ myAppraisal.notes }}</p>
         </article>
 
         <nav class="flex flex-wrap gap-1 border-b border-slate-200">
@@ -805,31 +826,30 @@ function cycleObjectiveProgress(staffId: string) {
             </div>
           </div>
 
-          <article v-if="availableTemplates.length" class="card p-5">
-            <header class="flex items-start justify-between gap-3 mb-3">
-              <div>
-                <h3 class="text-sm font-semibold text-slate-900">Cascading objectives</h3>
-                <p class="text-xs text-slate-500">Adopt company and department-level objectives into your cycle.</p>
-              </div>
-            </header>
-            <ul class="space-y-2">
+          <article v-if="availableTemplates.length" class="card overflow-hidden">
+            <div class="bg-gradient-to-r from-sycamore-50 to-leaf-50 border-b border-sycamore-100 px-5 py-4">
+              <h3 class="text-sm font-bold text-sycamore-900">Cascading objectives</h3>
+              <p class="text-xs text-sycamore-700/70">Adopt company and department-level objectives into your cycle.</p>
+            </div>
+            <ul class="divide-y divide-slate-100 p-0">
               <li
                 v-for="t in availableTemplates"
                 :key="t.id"
-                class="flex flex-wrap items-start justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50"
+                class="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5"
               >
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
+                    <span class="w-2 h-2 rounded-full" :class="t.scope === 'company' ? 'bg-sycamore-500' : 'bg-leaf-500'" />
                     <span class="font-semibold text-sm text-slate-900">{{ t.title }}</span>
                     <span class="badge" :class="t.scope === 'company' ? 'badge-blue' : 'badge-green'">{{ t.scope }}</span>
                     <span class="badge badge-slate text-[10px] uppercase">{{ t.kind }}</span>
                     <span class="badge badge-slate">Weight {{ Number(t.default_weight).toFixed(0) }}%</span>
                   </div>
-                  <p v-if="t.description" class="text-xs text-slate-600 mt-1">{{ t.description }}</p>
+                  <p v-if="t.description" class="text-xs text-slate-600 mt-1 ml-4">{{ t.description }}</p>
                 </div>
                 <button
                   type="button"
-                  class="btn-secondary text-xs"
+                  class="btn-primary text-xs !bg-leaf-600 hover:!bg-leaf-700"
                   :disabled="adoptingTemplateId === t.id"
                   @click="adoptTemplate(t)"
                 >
@@ -843,42 +863,71 @@ function cycleObjectiveProgress(staffId: string) {
             No objectives assigned to you in this cycle yet.
           </div>
 
-          <article v-for="o in objectives" :key="o.id" class="card p-5 space-y-4">
-            <header class="flex flex-wrap items-start justify-between gap-3">
-              <div class="min-w-0 flex-1 space-y-1">
-                <div class="flex flex-wrap items-center gap-2">
-                  <h3 class="text-base font-semibold text-slate-900">{{ o.title }}</h3>
-                  <span class="badge badge-slate uppercase text-[10px]">{{ o.kind }}</span>
-                  <span class="badge" :class="statusBadge(o.status)">{{ o.status.replaceAll('_', ' ') }}</span>
-                  <span class="badge badge-slate">{{ o.category }}</span>
-                </div>
-                <p v-if="o.description" class="text-sm text-slate-600">{{ o.description }}</p>
-                <div v-if="o.target_value" class="text-xs text-slate-500"><span class="font-semibold">Target:</span> {{ o.target_value }}</div>
-                <div class="flex gap-3 text-xs text-slate-500">
-                  <span>Weight {{ Number(o.weight).toFixed(0) }}%</span>
-                  <span v-if="o.rating !== null">Manager rating {{ Number(o.rating).toFixed(1) }}</span>
-                </div>
-              </div>
-            </header>
+          <!-- Category legend -->
+          <div v-if="objectives.length" class="flex flex-wrap gap-3 text-xs">
+            <span class="inline-flex items-center gap-1.5 text-slate-500">
+              <span class="w-2.5 h-2.5 rounded-full bg-sycamore-500" /> Company
+            </span>
+            <span class="inline-flex items-center gap-1.5 text-slate-500">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400" /> Team
+            </span>
+            <span class="inline-flex items-center gap-1.5 text-slate-500">
+              <span class="w-2.5 h-2.5 rounded-full bg-sky-400" /> Business
+            </span>
+            <span class="inline-flex items-center gap-1.5 text-slate-500">
+              <span class="w-2.5 h-2.5 rounded-full bg-leaf-400" /> Personal
+            </span>
+            <span class="inline-flex items-center gap-1.5 text-slate-500">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-400" /> Stretch
+            </span>
+          </div>
 
-            <div class="space-y-1">
-              <div class="flex items-center justify-between text-xs text-slate-600">
-                <span>Progress</span>
-                <span>{{ Number(o.progress).toFixed(0) }}%</span>
-              </div>
-              <input
-                type="range" min="0" max="100" step="5"
-                :value="o.progress"
-                :disabled="!canUpdate || saving[o.id]"
-                class="w-full"
-                @change="(e) => updateObjectiveProgress(o, Number((e.target as HTMLInputElement).value))"
-              />
-              <div class="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                <div class="h-full bg-sycamore-500 transition-all" :style="{ width: `${Math.min(100, Number(o.progress) || 0)}%` }" />
+          <article
+            v-for="o in objectives"
+            :key="o.id"
+            class="card overflow-hidden border-l-4 space-y-0"
+            :class="categoryStyle(o.category).border"
+          >
+            <div class="p-5 space-y-4" :class="categoryStyle(o.category).bg">
+              <header class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0 flex-1 space-y-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="w-2 h-2 rounded-full" :class="categoryStyle(o.category).dot" />
+                    <h3 class="text-base font-semibold text-slate-900">{{ o.title }}</h3>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 ml-4">
+                    <span class="badge badge-slate uppercase text-[10px]">{{ o.kind }}</span>
+                    <span class="badge" :class="statusBadge(o.status)">{{ o.status.replaceAll('_', ' ') }}</span>
+                    <span class="text-[11px] font-semibold capitalize" :class="categoryStyle(o.category).text">{{ o.category }}</span>
+                  </div>
+                  <p v-if="o.description" class="text-sm text-slate-600 ml-4">{{ o.description }}</p>
+                  <div v-if="o.target_value" class="text-xs text-slate-500 ml-4"><span class="font-semibold">Target:</span> {{ o.target_value }}</div>
+                  <div class="flex gap-3 text-xs text-slate-500 ml-4">
+                    <span>Weight {{ Number(o.weight).toFixed(0) }}%</span>
+                    <span v-if="o.rating !== null">Manager rating {{ Number(o.rating).toFixed(1) }}</span>
+                  </div>
+                </div>
+                <div class="text-right shrink-0">
+                  <div class="text-2xl font-bold text-slate-900">{{ Number(o.progress).toFixed(0) }}%</div>
+                  <div class="text-[10px] text-slate-400 uppercase tracking-wide">progress</div>
+                </div>
+              </header>
+
+              <div class="space-y-1.5">
+                <input
+                  type="range" min="0" max="100" step="5"
+                  :value="o.progress"
+                  :disabled="!canUpdate || saving[o.id]"
+                  class="w-full accent-sycamore-600"
+                  @change="(e) => updateObjectiveProgress(o, Number((e.target as HTMLInputElement).value))"
+                />
+                <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div class="h-full transition-all rounded-full" :class="progressColor(Number(o.progress) || 0)" :style="{ width: `${Math.min(100, Number(o.progress) || 0)}%` }" />
+                </div>
               </div>
             </div>
 
-            <div v-if="measuresByObjective[o.id]?.length" class="border-t border-slate-100 pt-3 space-y-3">
+            <div v-if="measuresByObjective[o.id]?.length" class="border-t border-slate-100 px-5 py-4 space-y-3">
               <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Measures</div>
               <ul class="space-y-3">
                 <li v-for="m in measuresByObjective[o.id]" :key="m.id" class="space-y-2">
@@ -924,33 +973,37 @@ function cycleObjectiveProgress(staffId: string) {
               </ul>
             </div>
 
-            <label class="block">
-              <span class="text-xs font-medium text-slate-600 mb-1 block">My notes to my manager</span>
-              <textarea
-                :value="o.staff_notes"
-                rows="3"
-                :disabled="!canUpdate"
-                class="input"
-                placeholder="What progress have you made? What do you need support on?"
-                @change="(e) => updateObjectiveNotes(o, (e.target as HTMLTextAreaElement).value)"
-              ></textarea>
-            </label>
+            <div class="border-t border-slate-100 px-5 py-4 space-y-3">
+              <label class="block">
+                <span class="text-xs font-medium text-slate-600 mb-1 block">My notes to my manager</span>
+                <textarea
+                  :value="o.staff_notes"
+                  rows="3"
+                  :disabled="!canUpdate"
+                  class="input"
+                  placeholder="What progress have you made? What do you need support on?"
+                  @change="(e) => updateObjectiveNotes(o, (e.target as HTMLTextAreaElement).value)"
+                ></textarea>
+              </label>
 
-            <div v-if="o.manager_notes" class="bg-slate-50 border border-slate-200 rounded-lg p-3">
-              <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Manager notes</div>
-              <p class="text-sm text-slate-700 whitespace-pre-wrap">{{ o.manager_notes }}</p>
+              <div v-if="o.manager_notes" class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Manager notes</div>
+                <p class="text-sm text-slate-700 whitespace-pre-wrap">{{ o.manager_notes }}</p>
+              </div>
             </div>
           </article>
         </template>
 
         <!-- REVIEWS TAB -->
         <template v-if="tab === 'reviews'">
-          <section class="card p-5 space-y-3">
+          <section class="card overflow-hidden">
+            <div class="bg-sycamore-50 border-b border-sycamore-100 px-5 py-3.5">
+              <h2 class="text-sm font-bold text-sycamore-900">Reviews to complete</h2>
+              <p class="text-xs text-sycamore-700/70 mt-0.5">Self-evaluations, manager appraisals, peer and upward reviews assigned to you.</p>
+            </div>
+            <div class="p-5 space-y-3">
             <header class="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Reviews to complete</h2>
-                <p class="text-xs text-slate-500 mt-1">Self-evaluations, manager appraisals, peer and upward reviews assigned to you.</p>
-              </div>
+              <div></div>
               <div class="flex flex-wrap gap-2">
                 <select v-model="assignedTypeFilter" class="input text-xs w-auto">
                   <option value="">All types</option>
@@ -983,14 +1036,17 @@ function cycleObjectiveProgress(staffId: string) {
               </li>
             </ul>
             <p v-else class="text-sm text-slate-400 italic">Nothing matches these filters.</p>
+            </div>
           </section>
 
-          <section class="card p-5 space-y-3">
+          <section class="card overflow-hidden">
+            <div class="bg-leaf-50 border-b border-leaf-100 px-5 py-3.5">
+              <h2 class="text-sm font-bold text-leaf-900">Feedback about me</h2>
+              <p class="text-xs text-leaf-700/70 mt-0.5">Reviews others have submitted. Anonymous feedback hides reviewer identity.</p>
+            </div>
+            <div class="p-5 space-y-3">
             <header class="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Feedback about me</h2>
-                <p class="text-xs text-slate-500 mt-1">Reviews others have submitted. Anonymous feedback hides reviewer identity.</p>
-              </div>
+              <div></div>
               <select v-model="aboutMeTypeFilter" class="input text-xs w-auto">
                 <option value="">All types</option>
                 <option v-for="t in REVIEWER_TYPES" :key="t" :value="t">{{ REVIEWER_TYPE_LABELS[t] }}</option>
@@ -1013,6 +1069,7 @@ function cycleObjectiveProgress(staffId: string) {
               </li>
             </ul>
             <p v-else class="text-sm text-slate-400 italic">No feedback yet in this cycle.</p>
+            </div>
           </section>
         </template>
 
