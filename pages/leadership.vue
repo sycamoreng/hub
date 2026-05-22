@@ -39,8 +39,8 @@ function onPhotoError(e: Event) {
           <SidebarIcon name="star" />
           <span class="ml-1">Leadership</span>
         </div>
-        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">The people steering Sycamore</h1>
-        <p class="text-sycamore-100 max-w-2xl">From the boardroom to senior management, meet the leaders shaping our direction.</p>
+        <h1 class="text-2xl sm:text-4xl font-bold tracking-tight mb-2 sm:mb-3">The people steering Sycamore</h1>
+        <p class="text-sycamore-100 max-w-2xl text-sm sm:text-base">From the boardroom to senior management, meet the leaders shaping our direction.</p>
       </div>
       <div class="absolute -right-16 -bottom-16 w-80 h-80 rounded-full bg-white/5" />
       <div class="absolute -right-8 -top-8 w-48 h-48 rounded-full bg-white/5" />

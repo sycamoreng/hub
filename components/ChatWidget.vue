@@ -82,10 +82,10 @@ function toggle() {
 </script>
 
 <template>
-  <div v-if="enabled" class="fixed bottom-5 right-5 z-50">
+  <div v-if="enabled" class="fixed bottom-20 lg:bottom-5 right-4 lg:right-5 z-30 chat-widget-position">
     <div
       v-if="open"
-      class="mb-3 w-[min(380px,calc(100vw-2.5rem))] h-[min(560px,calc(100vh-7rem))] flex flex-col card shadow-xl border-slate-200 overflow-hidden"
+      class="mb-3 w-[min(380px,calc(100vw-2rem))] h-[min(460px,calc(100vh-12rem))] lg:h-[min(560px,calc(100vh-7rem))] flex flex-col card shadow-xl border-slate-200 overflow-hidden"
     >
       <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-sycamore-700 to-sycamore-900 text-white">
         <div class="flex items-center gap-2.5">
@@ -145,7 +145,7 @@ function toggle() {
     <button
       @click="toggle"
       :class="[
-        'w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105',
+        'w-11 h-11 lg:w-14 lg:h-14 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105',
         open ? 'bg-slate-700 text-white' : 'bg-gradient-to-br from-sycamore-600 to-sycamore-800 text-white'
       ]"
       :aria-label="open ? 'Close chat' : 'Open chat'"

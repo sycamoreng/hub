@@ -720,7 +720,7 @@ function cycleObjectiveProgress(staffId: string) {
 <template>
   <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
     <header>
-      <h1 class="text-3xl font-bold text-slate-900">Performance</h1>
+      <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">Performance</h1>
       <p class="text-sm text-slate-500 mt-1">Track objectives, complete appraisals, and support your team's growth.</p>
     </header>
 

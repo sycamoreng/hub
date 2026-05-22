@@ -337,7 +337,7 @@ const historyMaxScheduled = computed(() => Math.max(1, ...historyBuckets.value.m
                 type="button"
                 :disabled="pending"
                 @click="clockIn"
-                class="w-full px-6 py-5 bg-sycamore-600 hover:bg-sycamore-700 disabled:opacity-50 text-white rounded-xl text-lg font-semibold shadow-sm transition-colors"
+                class="w-full px-5 py-3.5 sm:px-6 sm:py-5 bg-sycamore-600 hover:bg-sycamore-700 disabled:opacity-50 text-white rounded-xl text-base sm:text-lg font-semibold shadow-sm transition-colors"
               >
                 {{ pending ? 'Clocking in...' : 'Clock in' }}
               </button>
@@ -348,7 +348,7 @@ const historyMaxScheduled = computed(() => Math.max(1, ...historyBuckets.value.m
             <div v-else-if="status === 'in'">
               <div class="mb-4">
                 <div class="text-xs text-slate-500 uppercase tracking-wide">Clocked in</div>
-                <div class="text-2xl font-semibold text-slate-900 tabular-nums">{{ formatDateTime(todayRecord.clock_in_at) }}</div>
+                <div class="text-xl sm:text-2xl font-semibold text-slate-900 tabular-nums">{{ formatDateTime(todayRecord.clock_in_at) }}</div>
                 <div class="mt-1 text-sm text-slate-600">Elapsed <span class="font-semibold text-slate-900">{{ formatDuration(elapsed) }}</span></div>
                 <div v-if="lateMinutes > 0" class="mt-1 text-xs font-semibold text-amber-700">{{ lateMinutes }} min late</div>
               </div>
@@ -356,7 +356,7 @@ const historyMaxScheduled = computed(() => Math.max(1, ...historyBuckets.value.m
                 type="button"
                 :disabled="pending"
                 @click="clockOut"
-                class="w-full px-6 py-5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-lg font-semibold shadow-sm transition-colors"
+                class="w-full px-5 py-3.5 sm:px-6 sm:py-5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-base sm:text-lg font-semibold shadow-sm transition-colors"
               >
                 {{ pending ? 'Clocking out...' : 'Clock out' }}
               </button>
@@ -377,27 +377,27 @@ const historyMaxScheduled = computed(() => Math.max(1, ...historyBuckets.value.m
 
       <section class="mb-8">
         <h2 class="text-sm font-semibold text-slate-900 mb-3">Weekly summary</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <div class="bg-white border border-slate-200 rounded-xl p-4">
-            <div class="text-xs text-slate-500">Scheduled days</div>
-            <div class="text-lg font-semibold text-slate-900 tabular-nums">{{ weekSummary.scheduledDays }}</div>
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
+          <div class="bg-white border border-slate-200 rounded-xl p-3 sm:p-4">
+            <div class="text-[10px] sm:text-xs text-slate-500">Scheduled days</div>
+            <div class="text-base sm:text-lg font-semibold text-slate-900 tabular-nums">{{ weekSummary.scheduledDays }}</div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl p-4">
-            <div class="text-xs text-slate-500">On time</div>
-            <div class="text-lg font-semibold text-emerald-700 tabular-nums">{{ weekSummary.present }}</div>
+          <div class="bg-white border border-slate-200 rounded-xl p-3 sm:p-4">
+            <div class="text-[10px] sm:text-xs text-slate-500">On time</div>
+            <div class="text-base sm:text-lg font-semibold text-emerald-700 tabular-nums">{{ weekSummary.present }}</div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl p-4">
-            <div class="text-xs text-slate-500">Late arrivals</div>
-            <div class="text-lg font-semibold text-amber-700 tabular-nums">{{ weekSummary.late }}</div>
-            <div v-if="weekSummary.totalLateMins" class="text-[11px] text-amber-600 mt-0.5">{{ weekSummary.totalLateMins }} min total</div>
+          <div class="bg-white border border-slate-200 rounded-xl p-3 sm:p-4">
+            <div class="text-[10px] sm:text-xs text-slate-500">Late arrivals</div>
+            <div class="text-base sm:text-lg font-semibold text-amber-700 tabular-nums">{{ weekSummary.late }}</div>
+            <div v-if="weekSummary.totalLateMins" class="text-[10px] sm:text-[11px] text-amber-600 mt-0.5">{{ weekSummary.totalLateMins }} min total</div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl p-4">
-            <div class="text-xs text-slate-500">Absences</div>
-            <div class="text-lg font-semibold text-rose-700 tabular-nums">{{ weekSummary.absent }}</div>
+          <div class="bg-white border border-slate-200 rounded-xl p-3 sm:p-4">
+            <div class="text-[10px] sm:text-xs text-slate-500">Absences</div>
+            <div class="text-base sm:text-lg font-semibold text-rose-700 tabular-nums">{{ weekSummary.absent }}</div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl p-4 col-span-2 sm:col-span-1">
-            <div class="text-xs text-slate-500">Hours worked</div>
-            <div class="text-lg font-semibold text-slate-900 tabular-nums">{{ formatDuration(weekSummary.hoursWorked) }}</div>
+          <div class="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 col-span-2 sm:col-span-1">
+            <div class="text-[10px] sm:text-xs text-slate-500">Hours worked</div>
+            <div class="text-base sm:text-lg font-semibold text-slate-900 tabular-nums">{{ formatDuration(weekSummary.hoursWorked) }}</div>
           </div>
         </div>
       </section>

@@ -78,7 +78,7 @@ const filtered = computed(() =>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <article v-for="lb in learningBudgets" :key="lb.id" class="card p-5">
           <div class="text-xs uppercase tracking-wide text-slate-500 font-semibold">{{ lb.level }}</div>
-          <div class="text-2xl font-bold text-slate-900 mt-1">{{ formatNGN(lb.annual_amount, lb.currency) }}</div>
+          <div class="text-lg sm:text-2xl font-bold text-slate-900 mt-1">{{ formatNGN(lb.annual_amount, lb.currency) }}</div>
           <div class="text-xs text-slate-500 mt-1">per year</div>
           <p v-if="lb.notes" class="text-xs text-slate-600 mt-3 whitespace-pre-line">{{ lb.notes }}</p>
         </article>

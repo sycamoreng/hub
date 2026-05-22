@@ -145,7 +145,7 @@ async function handleSignOut() {
     </Transition>
 
     <div class="flex-1 lg:ml-64 flex flex-col min-w-0">
-      <header class="lg:hidden sticky top-0 h-16 bg-white/95 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 z-20">
+      <header class="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 z-20 safe-top">
         <div class="flex items-center gap-2.5">
           <img src="/logo-icon.png" alt="Sycamore" class="w-8 h-8" />
           <span class="font-bold text-slate-900 text-sm">Sycamore Hub</span>
@@ -180,7 +180,7 @@ async function handleSignOut() {
           <NotificationsBell v-if="isAuthenticated" />
         </ClientOnly>
       </div>
-      <main class="flex-1 p-4 sm:p-6 lg:p-10 pb-24 lg:pb-10 safe-main-bottom">
+      <main class="flex-1 p-4 sm:p-6 lg:p-10 pb-24 lg:pb-10 lg:mt-0 safe-main-bottom safe-main-top">
         <slot />
       </main>
     </div>
@@ -205,6 +205,9 @@ async function handleSignOut() {
   transform: translateX(-100%);
 }
 @media (max-width: 1023px) {
+  .safe-main-top {
+    margin-top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  }
   .safe-main-bottom {
     padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px) + 1rem);
   }

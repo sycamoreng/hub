@@ -83,8 +83,8 @@ async function googleSignIn() {
         <div class="mb-12">
           <img src="/logo.png" alt="Sycamore" class="h-9 w-auto brightness-0 invert" />
         </div>
-        <h1 class="text-4xl font-bold tracking-tight mb-4 max-w-md">Welcome to the Sycamore Information Hub.</h1>
-        <p class="text-sycamore-50 max-w-md">Sign in with your Sycamore Google account to access company knowledge, products, policies, and more.</p>
+        <h1 class="text-2xl sm:text-4xl font-bold tracking-tight mb-3 sm:mb-4 max-w-md">Welcome to the Sycamore Information Hub.</h1>
+        <p class="text-sycamore-50 max-w-md text-sm sm:text-base">Sign in with your Sycamore Google account to access company knowledge, products, policies, and more.</p>
       </div>
       <div class="relative z-10 text-sm text-sycamore-100/80">Sycamore &copy; {{ new Date().getFullYear() }}</div>
       <div class="absolute -right-24 -bottom-24 w-96 h-96 rounded-full bg-white/5" />

@@ -99,26 +99,26 @@ watch(ready, (r) => { if (r && isAdmin.value) load() }, { immediate: true })
     </div>
 
     <template v-else>
-      <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
-        <div class="card p-4 text-center">
-          <div class="text-2xl font-bold text-slate-900">{{ stats.total }}</div>
-          <div class="text-xs text-slate-500 mt-1">Active Flags</div>
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 mb-6">
+        <div class="card p-3 sm:p-4 text-center">
+          <div class="text-lg sm:text-2xl font-bold text-slate-900">{{ stats.total }}</div>
+          <div class="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Active Flags</div>
         </div>
-        <div class="card p-4 text-center border-red-200">
-          <div class="text-2xl font-bold text-red-600">{{ stats.critical }}</div>
-          <div class="text-xs text-slate-500 mt-1">Critical</div>
+        <div class="card p-3 sm:p-4 text-center border-red-200">
+          <div class="text-lg sm:text-2xl font-bold text-red-600">{{ stats.critical }}</div>
+          <div class="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Critical</div>
         </div>
-        <div class="card p-4 text-center border-orange-200">
-          <div class="text-2xl font-bold text-orange-600">{{ stats.high }}</div>
-          <div class="text-xs text-slate-500 mt-1">High</div>
+        <div class="card p-3 sm:p-4 text-center border-orange-200">
+          <div class="text-lg sm:text-2xl font-bold text-orange-600">{{ stats.high }}</div>
+          <div class="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">High</div>
         </div>
-        <div class="card p-4 text-center border-amber-200">
-          <div class="text-2xl font-bold text-amber-600">{{ stats.medium }}</div>
-          <div class="text-xs text-slate-500 mt-1">Medium</div>
+        <div class="card p-3 sm:p-4 text-center border-amber-200">
+          <div class="text-lg sm:text-2xl font-bold text-amber-600">{{ stats.medium }}</div>
+          <div class="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Medium</div>
         </div>
-        <div class="card p-4 text-center">
-          <div class="text-2xl font-bold text-slate-600">{{ stats.low }}</div>
-          <div class="text-xs text-slate-500 mt-1">Low</div>
+        <div class="card p-3 sm:p-4 text-center">
+          <div class="text-lg sm:text-2xl font-bold text-slate-600">{{ stats.low }}</div>
+          <div class="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Low</div>
         </div>
       </div>
 

@@ -266,22 +266,22 @@ const upcomingAnniversaries = computed(() => {
 
     <div v-else>
       <!-- KPI Summary Cards -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <div class="card p-5">
-          <div class="text-3xl font-bold text-slate-900">{{ activeStaff.length }}</div>
-          <div class="text-sm text-slate-500 mt-1">Active staff</div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-8">
+        <div class="card p-3 sm:p-5">
+          <div class="text-xl sm:text-3xl font-bold text-slate-900">{{ activeStaff.length }}</div>
+          <div class="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">Active staff</div>
         </div>
-        <div class="card p-5">
-          <div class="text-3xl font-bold text-slate-900">{{ averageAge || '—' }}</div>
-          <div class="text-sm text-slate-500 mt-1">Average age</div>
+        <div class="card p-3 sm:p-5">
+          <div class="text-xl sm:text-3xl font-bold text-slate-900">{{ averageAge || '—' }}</div>
+          <div class="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">Average age</div>
         </div>
-        <div class="card p-5">
-          <div class="text-3xl font-bold text-slate-900">{{ averageService }}</div>
-          <div class="text-sm text-slate-500 mt-1">Avg. years of service</div>
+        <div class="card p-3 sm:p-5">
+          <div class="text-xl sm:text-3xl font-bold text-slate-900">{{ averageService }}</div>
+          <div class="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">Avg. service</div>
         </div>
-        <div class="card p-5">
-          <div class="text-3xl font-bold text-slate-900">{{ turnoverRate }}%</div>
-          <div class="text-sm text-slate-500 mt-1">Turnover rate</div>
+        <div class="card p-3 sm:p-5">
+          <div class="text-xl sm:text-3xl font-bold text-slate-900">{{ turnoverRate }}%</div>
+          <div class="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">Turnover rate</div>
         </div>
       </div>
 

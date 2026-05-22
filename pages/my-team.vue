@@ -144,7 +144,7 @@ load()
 <template>
   <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
     <header class="mb-8">
-      <h1 class="text-3xl font-bold text-slate-900">My team</h1>
+      <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">My team</h1>
       <p class="text-sm text-slate-500 mt-1">Everyone reporting into you — directly, through a team you lead, or a department you head.</p>
     </header>
 

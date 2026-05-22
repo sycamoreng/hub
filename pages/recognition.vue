@@ -145,7 +145,7 @@ function rankMedal(i: number): string {
 
 <template>
   <div class="max-w-6xl mx-auto space-y-8">
-    <header class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sycamore-700 via-sycamore-600 to-leaf-600 p-8 sm:p-10 text-white">
+    <header class="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-sycamore-700 via-sycamore-600 to-leaf-600 p-5 sm:p-10 text-white">
       <div class="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-white/10 blur-2xl"></div>
       <div class="absolute -bottom-16 -left-10 w-72 h-72 rounded-full bg-leaf-400/20 blur-3xl"></div>
       <div class="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -154,16 +154,16 @@ function rankMedal(i: number): string {
             <span class="w-1.5 h-1.5 rounded-full bg-leaf-300"></span>
             Recognition
           </div>
-          <h1 class="mt-3 text-3xl sm:text-4xl font-bold tracking-tight leading-tight">Celebrate the team</h1>
-          <p class="mt-2 text-white/80 text-sm sm:text-base max-w-xl">Give kudos, earn points, climb the leaderboard, and collect badges along the way.</p>
+          <h1 class="mt-3 text-2xl sm:text-4xl font-bold tracking-tight leading-tight">Celebrate the team</h1>
+          <p class="mt-1.5 sm:mt-2 text-white/80 text-xs sm:text-base max-w-xl">Give kudos, earn points, climb the leaderboard, and collect badges along the way.</p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-3">
           <div class="text-right">
-            <div class="text-[11px] uppercase tracking-wide text-white/70 font-semibold">Your points</div>
-            <div class="text-3xl font-bold tabular-nums">{{ myPoints }}</div>
-            <div v-if="myRank" class="text-[11px] text-white/70">Rank #{{ myRank }} this {{ scope === 'all' ? 'time' : scope }}</div>
+            <div class="text-[10px] sm:text-[11px] uppercase tracking-wide text-white/70 font-semibold">Your points</div>
+            <div class="text-xl sm:text-3xl font-bold tabular-nums">{{ myPoints }}</div>
+            <div v-if="myRank" class="text-[10px] sm:text-[11px] text-white/70">Rank #{{ myRank }} this {{ scope === 'all' ? 'time' : scope }}</div>
           </div>
-          <button type="button" @click="openKudos()" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-sycamore-700 font-semibold text-sm hover:bg-slate-100 transition-colors shadow-sm">
+          <button type="button" @click="openKudos()" class="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white text-sycamore-700 font-semibold text-xs sm:text-sm hover:bg-slate-100 transition-colors shadow-sm whitespace-nowrap">
             Give kudos
           </button>
         </div>
@@ -188,25 +188,25 @@ function rankMedal(i: number): string {
           No activity yet in this window. Kick things off with a post or some kudos.
         </div>
         <ul v-else class="divide-y divide-slate-100">
-          <li v-for="(row, i) in leaders" :key="row.user_id" class="flex items-center gap-4 px-5 py-3" :class="row.user_id === user?.id ? 'bg-sycamore-50/60' : ''">
-            <div class="w-8 h-8 rounded-full border text-xs font-bold flex items-center justify-center tabular-nums" :class="rankMedal(i)">{{ i + 1 }}</div>
-            <NuxtLink v-if="row.staff_id" :to="`/profile/${row.staff_id}`" class="flex items-center gap-3 min-w-0 flex-1">
-              <img v-if="row.avatar" :src="row.avatar" :alt="row.name" referrerpolicy="no-referrer" class="w-10 h-10 rounded-full object-cover border border-slate-200" />
-              <div v-else class="w-10 h-10 rounded-full bg-sycamore-100 text-sycamore-700 flex items-center justify-center text-sm font-semibold">{{ initials(row.name) }}</div>
+          <li v-for="(row, i) in leaders" :key="row.user_id" class="flex items-center gap-2.5 sm:gap-4 px-3 sm:px-5 py-2.5 sm:py-3" :class="row.user_id === user?.id ? 'bg-sycamore-50/60' : ''">
+            <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full border text-[10px] sm:text-xs font-bold flex items-center justify-center tabular-nums shrink-0" :class="rankMedal(i)">{{ i + 1 }}</div>
+            <NuxtLink v-if="row.staff_id" :to="`/profile/${row.staff_id}`" class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <img v-if="row.avatar" :src="row.avatar" :alt="row.name" referrerpolicy="no-referrer" class="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border border-slate-200 shrink-0" />
+              <div v-else class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-sycamore-100 text-sycamore-700 flex items-center justify-center text-xs sm:text-sm font-semibold shrink-0">{{ initials(row.name) }}</div>
               <div class="min-w-0">
-                <div class="font-semibold text-sm text-slate-900 truncate">{{ row.name }}</div>
-                <div class="text-xs text-slate-500 truncate">{{ row.role || '' }}</div>
+                <div class="font-semibold text-xs sm:text-sm text-slate-900 truncate">{{ row.name }}</div>
+                <div class="text-[10px] sm:text-xs text-slate-500 truncate">{{ row.role || '' }}</div>
               </div>
             </NuxtLink>
-            <div v-else class="flex items-center gap-3 min-w-0 flex-1">
-              <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-sm font-semibold">{{ initials(row.name) }}</div>
+            <div v-else class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs sm:text-sm font-semibold shrink-0">{{ initials(row.name) }}</div>
               <div class="min-w-0">
-                <div class="font-semibold text-sm text-slate-900 truncate">{{ row.name }}</div>
+                <div class="font-semibold text-xs sm:text-sm text-slate-900 truncate">{{ row.name }}</div>
               </div>
             </div>
-            <div class="text-right">
-              <div class="text-lg font-bold text-slate-900 tabular-nums">{{ row.points }}</div>
-              <div class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">points</div>
+            <div class="text-right shrink-0">
+              <div class="text-sm sm:text-lg font-bold text-slate-900 tabular-nums">{{ row.points }}</div>
+              <div class="text-[9px] sm:text-[10px] uppercase tracking-wide text-slate-400 font-semibold">pts</div>
             </div>
           </li>
         </ul>

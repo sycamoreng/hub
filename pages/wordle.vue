@@ -184,8 +184,8 @@ function shareSummary() {
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
         Daily Word
       </div>
-      <h1 class="mt-3 text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">Sycamore Wordle</h1>
-      <p class="mt-1 text-sm text-slate-500">One puzzle a day. Fewer guesses, more points.</p>
+      <h1 class="mt-3 text-2xl sm:text-4xl font-bold text-slate-900 tracking-tight">Sycamore Wordle</h1>
+      <p class="mt-1 text-xs sm:text-sm text-slate-500">One puzzle a day. Fewer guesses, more points.</p>
     </header>
 
     <div v-if="loading" class="text-center text-sm text-slate-400 py-10">Loading your puzzle...</div>

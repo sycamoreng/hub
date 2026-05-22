@@ -171,7 +171,7 @@ const sections: Section[] = [
     <article class="manual bg-white border border-slate-200 rounded-2xl p-8 md:p-12 shadow-sm">
       <header class="border-b border-slate-200 pb-8 mb-8">
         <div class="text-xs uppercase tracking-widest text-sycamore-700 font-semibold mb-2">Sycamore Info Hub</div>
-        <h2 class="text-4xl font-bold text-slate-900 mb-2">Staff Operating Manual</h2>
+        <h2 class="text-2xl sm:text-4xl font-bold text-slate-900 mb-2">Staff Operating Manual</h2>
         <p class="text-slate-600">A practical guide for everyone at Sycamore — what lives on the hub and how to use it.</p>
         <p class="text-sm text-slate-500 mt-4">Version 1.1 &middot; {{ today }}</p>
       </header>

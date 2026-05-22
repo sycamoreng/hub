@@ -127,22 +127,22 @@ watch(tab, () => load())
       <button @click="showNew = true" class="btn-primary">New Request</button>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-      <div class="card p-4 text-center">
-        <div class="text-2xl font-bold text-blue-600">{{ stats.open }}</div>
-        <div class="text-xs text-slate-500 mt-1">Open</div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <div class="card p-3 sm:p-4 text-center">
+        <div class="text-lg sm:text-2xl font-bold text-blue-600">{{ stats.open }}</div>
+        <div class="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Open</div>
       </div>
-      <div class="card p-4 text-center">
-        <div class="text-2xl font-bold text-amber-600">{{ stats.in_progress }}</div>
-        <div class="text-xs text-slate-500 mt-1">In Progress</div>
+      <div class="card p-3 sm:p-4 text-center">
+        <div class="text-lg sm:text-2xl font-bold text-amber-600">{{ stats.in_progress }}</div>
+        <div class="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">In Progress</div>
       </div>
-      <div class="card p-4 text-center">
-        <div class="text-2xl font-bold text-leaf-600">{{ stats.resolved }}</div>
-        <div class="text-xs text-slate-500 mt-1">Resolved</div>
+      <div class="card p-3 sm:p-4 text-center">
+        <div class="text-lg sm:text-2xl font-bold text-leaf-600">{{ stats.resolved }}</div>
+        <div class="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Resolved</div>
       </div>
-      <div class="card p-4 text-center">
-        <div class="text-2xl font-bold text-red-600">{{ stats.breached }}</div>
-        <div class="text-xs text-slate-500 mt-1">SLA Breached</div>
+      <div class="card p-3 sm:p-4 text-center">
+        <div class="text-lg sm:text-2xl font-bold text-red-600">{{ stats.breached }}</div>
+        <div class="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">SLA Breached</div>
       </div>
     </div>
 

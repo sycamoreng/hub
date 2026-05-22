@@ -573,8 +573,8 @@ useHead({ title: 'Sycamore Run' })
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
         Coffee break
       </div>
-      <h1 class="mt-3 text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">Sycamore Run</h1>
-      <p class="mt-1 text-sm text-slate-500">Hop the cups, dodge the canopies, fly past the birds.</p>
+      <h1 class="mt-3 text-2xl sm:text-4xl font-bold text-slate-900 tracking-tight">Sycamore Run</h1>
+      <p class="mt-1 text-xs sm:text-sm text-slate-500">Hop the cups, dodge the canopies, fly past the birds.</p>
     </header>
 
     <div ref="containerRef" class="bg-white border border-slate-200 rounded-3xl p-3 sm:p-4 shadow-sm">
@@ -609,7 +609,7 @@ useHead({ title: 'Sycamore Run' })
         >
           <div class="bg-white/95 backdrop-blur rounded-2xl border border-emerald-200 px-6 py-5 max-w-sm shadow-lg">
             <div class="text-emerald-700 font-bold uppercase tracking-[0.2em] text-[11px]">Run finished</div>
-            <div class="mt-1 text-3xl font-bold text-slate-900 tabular-nums">{{ lastScore }}</div>
+            <div class="mt-1 text-2xl sm:text-3xl font-bold text-slate-900 tabular-nums">{{ lastScore }}</div>
             <div v-if="lastIsPb" class="mt-1 text-emerald-700 text-sm font-semibold">New personal best!</div>
             <div v-else class="mt-1 text-slate-500 text-xs">Personal best: {{ personalBest }}</div>
             <button

@@ -127,12 +127,12 @@ watch(ready, (r) => { if (r) load() }, { immediate: true })
 
 <template>
   <div class="max-w-6xl mx-auto px-4 py-8">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-6 gap-3">
       <div>
         <h1 class="section-title">Photo Wall</h1>
         <p class="section-subtitle">Company memories and event galleries</p>
       </div>
-      <button @click="showUpload = true" class="btn-primary">Share a Photo</button>
+      <button @click="showUpload = true" class="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-sycamore-600 text-white text-xs sm:text-sm font-medium hover:bg-sycamore-700 active:scale-[0.97] transition-all whitespace-nowrap">Share a Photo</button>
     </div>
 
     <div v-if="events.length" class="flex flex-wrap gap-2 mb-6">

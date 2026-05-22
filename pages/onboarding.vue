@@ -163,8 +163,8 @@ function toggleExpand(id: string) {
           <SidebarIcon name="check" />
           <span class="ml-1">Learning</span>
         </div>
-        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Your learning path</h1>
-        <p class="text-sycamore-100 max-w-2xl">Lessons, videos, and tasks assigned to you, your department, or the whole company.</p>
+        <h1 class="text-2xl sm:text-4xl font-bold tracking-tight mb-2 sm:mb-3">Your learning path</h1>
+        <p class="text-sycamore-100 max-w-2xl text-sm sm:text-base">Lessons, videos, and tasks assigned to you, your department, or the whole company.</p>
         <div v-if="user" class="mt-6 max-w-md">
           <div class="flex items-center justify-between text-sm mb-2">
             <span>{{ stats.done }} of {{ stats.total }} completed</span>

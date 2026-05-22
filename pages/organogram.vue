@@ -312,7 +312,7 @@ load()
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
     <header class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
       <div>
-        <h1 class="text-3xl font-bold text-slate-900">Organogram</h1>
+        <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">Organogram</h1>
         <p class="text-sm text-slate-500 mt-1">Reporting structure from leadership down to every team member.</p>
       </div>
       <label class="relative w-full sm:w-72">

@@ -230,7 +230,7 @@ function resetPreview() {
             <span class="w-2 h-2 rounded-full bg-leaf-500"></span>
             Workers' Day Raffle
           </div>
-          <h1 class="mt-3 text-3xl sm:text-4xl font-bold text-slate-900">
+          <h1 class="mt-3 text-2xl sm:text-4xl font-bold text-slate-900">
             {{ revealed && allocation && !allocation.is_blank ? "You won!" :
                revealed && allocation && allocation.is_blank ? "Thank you for spinning" :
                "Spin the wheel" }}
