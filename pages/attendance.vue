@@ -403,14 +403,15 @@ const historyMaxScheduled = computed(() => Math.max(1, ...historyBuckets.value.m
       </section>
 
       <section class="mb-8">
-        <header class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <header class="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <h2 class="text-sm font-semibold text-slate-900">Attendance history</h2>
-          <div class="inline-flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+          <div class="inline-flex rounded-lg border border-slate-200 overflow-hidden text-[10px] sm:text-xs">
             <button v-for="r in (['week','month','quarter','year'] as const)" :key="r" type="button"
               @click="historyRange = r"
               :class="historyRange === r ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'"
-              class="px-3 py-1.5 font-medium capitalize border-r last:border-r-0 border-slate-200">
-              {{ r === 'week' ? 'Week-on-week' : r === 'month' ? 'Month-on-month' : r === 'quarter' ? 'Quarter-on-quarter' : 'Year-on-year' }}
+              class="px-2 sm:px-3 py-1 sm:py-1.5 font-medium capitalize border-r last:border-r-0 border-slate-200">
+              <span class="hidden sm:inline">{{ r === 'week' ? 'Week-on-week' : r === 'month' ? 'Month-on-month' : r === 'quarter' ? 'Quarter-on-quarter' : 'Year-on-year' }}</span>
+              <span class="sm:hidden">{{ r === 'week' ? 'Week' : r === 'month' ? 'Month' : r === 'quarter' ? 'Qtr' : 'Year' }}</span>
             </button>
           </div>
         </header>

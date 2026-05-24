@@ -20,9 +20,10 @@ Deno.serve(async (req: Request) => {
     );
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!anthropicKey) {
+    const geminiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!anthropicKey && !geminiKey) {
       return new Response(
-        JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }),
+        JSON.stringify({ error: "No AI API key configured (ANTHROPIC_API_KEY or GEMINI_API_KEY)" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -74,21 +75,7 @@ Deno.serve(async (req: Request) => {
       ? `The company is called ${companyInfo.name || "Sycamore"}. ${companyInfo.description || ""}`
       : "The company is called Sycamore, a fintech/technology company in Nigeria.";
 
-    // Generate sparks via AI
-    const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-sonnet-20240620",
-        max_tokens: 2048,
-        messages: [
-          {
-            role: "user",
-            content: `You are generating trivia questions for a "Daily Spark" engagement feature at a workplace. Staff answer one question per day to earn points and stay engaged.
+    const sparkPrompt = `You are generating trivia questions for a "Daily Spark" engagement feature at a workplace. Staff answer one question per day to earn points and stay engaged.
 
 ${companyContext}
 
@@ -119,36 +106,84 @@ Return ONLY a JSON array with this format, no other text:
     "options": ["Option A", "Option B", "Option C", "Option D"],
     "correct_index": 0
   }
-]`,
-          },
-        ],
-      }),
-    });
+]`;
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      return new Response(
-        JSON.stringify({ error: "AI generation failed", details: errText }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    function parseJsonFromText(rawText: string): any[] | null {
+      const cleaned = rawText.replace(/```(?:json)?\s*/g, "").replace(/```/g, "").trim();
+      const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+      try {
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch { /* ignore */ }
+      return null;
     }
 
-    const aiData = await aiResponse.json();
-    const rawText = aiData.content?.[0]?.text || "[]";
+    let rawText = "";
+
+    // Try Anthropic first
+    if (anthropicKey) {
+      try {
+        const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": anthropicKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-3-5-sonnet-20241022",
+            max_tokens: 2048,
+            messages: [{ role: "user", content: sparkPrompt }],
+          }),
+        });
+
+        if (aiResponse.ok) {
+          const aiData = await aiResponse.json();
+          rawText = aiData.content?.[0]?.text || "";
+        } else {
+          console.error("Anthropic API error:", aiResponse.status);
+        }
+      } catch (err: any) {
+        console.error("Anthropic exception:", err?.message);
+      }
+    }
+
+    // Try Gemini as fallback
+    if (!parseJsonFromText(rawText) && geminiKey) {
+      try {
+        const geminiResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: sparkPrompt }] }],
+              generationConfig: { temperature: 0.8, maxOutputTokens: 4096 },
+            }),
+          }
+        );
+
+        if (geminiResponse.ok) {
+          const geminiData = await geminiResponse.json();
+          const parts = geminiData.candidates?.[0]?.content?.parts || [];
+          rawText = parts.filter((p: any) => p.text).map((p: any) => p.text).join("");
+        } else {
+          console.error("Gemini API error:", geminiResponse.status);
+        }
+      } catch (err: any) {
+        console.error("Gemini exception:", err?.message);
+      }
+    }
 
     let sparks: { question: string; options: string[]; correct_index: number }[];
-    try {
-      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-      sparks = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
-      if (!Array.isArray(sparks) || sparks.length === 0) {
-        throw new Error("No valid sparks generated");
-      }
-    } catch {
+    const parsed = parseJsonFromText(rawText);
+    if (!parsed) {
       return new Response(
-        JSON.stringify({ error: "Failed to parse AI response", raw: rawText.slice(0, 200) }),
+        JSON.stringify({ error: "Failed to generate sparks from AI", raw: rawText.slice(0, 200) }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    sparks = parsed;
 
     // Insert sparks for missing dates
     const inserted: string[] = [];

@@ -16,7 +16,7 @@ export type PostKind = 'standard' | 'birthday' | 'anniversary' | 'mood' | 'miles
 
 export interface PostRow {
   id: string
-  author_id: string
+  author_id: string | null
   content: string
   is_published: boolean
   created_at: string
@@ -24,6 +24,10 @@ export interface PostRow {
   image_url?: string
   post_kind?: PostKind
   template_data?: Record<string, any>
+}
+
+export function isBotPost(post: PostRow): boolean {
+  return !post.author_id || post.template_data?.bot === true
 }
 
 export interface PostTemplateMeta {

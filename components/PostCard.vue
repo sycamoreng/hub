@@ -10,6 +10,7 @@ const props = defineProps<{
   mentions?: PostMention[]
   formattedTime?: string
   variant?: 'feed' | 'compact'
+  isBot?: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'delete'): void }>()
@@ -65,14 +66,17 @@ const showHeaderBanner = computed(() => !!template.value)
         <div class="min-w-0 flex-1">
           <div class="flex items-center justify-between gap-3">
             <div class="min-w-0">
-              <NuxtLink
-                v-if="authorStaffId"
-                :to="`/profile/${authorStaffId}`"
-                class="font-semibold text-slate-900 text-sm hover:text-sycamore-700 truncate"
-              >{{ authorName }}</NuxtLink>
-              <span v-else class="font-semibold text-slate-900 text-sm truncate">
-                {{ authorName || 'Sycamore staff' }}
-              </span>
+              <div class="flex items-center gap-1.5">
+                <NuxtLink
+                  v-if="authorStaffId"
+                  :to="`/profile/${authorStaffId}`"
+                  class="font-semibold text-slate-900 text-sm hover:text-sycamore-700 truncate"
+                >{{ authorName }}</NuxtLink>
+                <span v-else class="font-semibold text-slate-900 text-sm truncate">
+                  {{ authorName || 'Sycamore staff' }}
+                </span>
+                <span v-if="isBot" class="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-sycamore-100 text-sycamore-700 rounded px-1.5 py-0.5 uppercase tracking-wide">Bot</span>
+              </div>
               <div class="text-xs text-slate-400">{{ formattedTime }}</div>
             </div>
             <slot name="actions" />

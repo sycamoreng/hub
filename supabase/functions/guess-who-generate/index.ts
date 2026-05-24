@@ -131,29 +131,11 @@ Deno.serve(async (req: Request) => {
       .filter(Boolean)
       .join("\n");
 
-    // Generate clues using Anthropic
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!anthropicKey) {
-      return new Response(
-        JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // Generate clues - try Anthropic first, then Gemini, fall back to deterministic
+    let clues: string[];
+    let aiUsed = false;
 
-    const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-sonnet-20240620",
-        max_tokens: 1024,
-        messages: [
-          {
-            role: "user",
-            content: `You are generating clues for a "Guess Who" game at a company called Sycamore. Staff will try to guess which colleague is being described based on your clues.
+    const cluePrompt = `You are generating clues for a "Guess Who" game at a company called Sycamore. Staff will try to guess which colleague is being described based on your clues.
 
 Here is information about the mystery person:
 ${context}
@@ -170,38 +152,106 @@ Rules:
 - Clue 5 should make it fairly clear if you know the person
 
 Return ONLY a JSON array of 5 strings, no other text. Example format:
-["clue 1", "clue 2", "clue 3", "clue 4", "clue 5"]`,
-          },
-        ],
-      }),
-    });
+["clue 1", "clue 2", "clue 3", "clue 4", "clue 5"]`;
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      return new Response(
-        JSON.stringify({ error: "AI generation failed", details: errText }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    function parseCluesFromText(rawText: string): string[] | null {
+      const cleaned = rawText.replace(/```(?:json)?\s*/g, "").replace(/```/g, "").trim();
+      const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+      try {
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+        if (Array.isArray(parsed) && parsed.length === 5) return parsed;
+      } catch { /* ignore */ }
+      return null;
     }
 
-    const aiData = await aiResponse.json();
-    const rawText = aiData.content?.[0]?.text || "[]";
+    // Try Anthropic
+    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+    if (anthropicKey) {
+      try {
+        const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": anthropicKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-3-5-sonnet-20241022",
+            max_tokens: 1024,
+            messages: [{ role: "user", content: cluePrompt }],
+          }),
+        });
 
-    // Parse the JSON array from the response
-    let clues: string[];
-    try {
-      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-      clues = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
-      if (!Array.isArray(clues) || clues.length !== 5) {
-        throw new Error("Expected exactly 5 clues");
+        if (aiResponse.ok) {
+          const aiData = await aiResponse.json();
+          const rawText = aiData.content?.[0]?.text || "[]";
+          const parsed = parseCluesFromText(rawText);
+          if (parsed) { clues = parsed; aiUsed = true; }
+        } else {
+          console.error("Anthropic API error:", aiResponse.status);
+        }
+      } catch (aiErr: any) {
+        console.error("Anthropic exception:", aiErr?.message);
       }
-    } catch {
+    }
+
+    // Try Gemini as fallback
+    const geminiKey = Deno.env.get("GEMINI_API_KEY");
+    if (geminiKey && !aiUsed) {
+      try {
+        const geminiResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: cluePrompt }] }],
+              generationConfig: { temperature: 0.8, maxOutputTokens: 4096 },
+            }),
+          }
+        );
+
+        if (geminiResponse.ok) {
+          const geminiData = await geminiResponse.json();
+          const parts = geminiData.candidates?.[0]?.content?.parts || [];
+          const rawText = parts
+            .filter((p: any) => p.text)
+            .map((p: any) => p.text)
+            .join("");
+          const parsed = parseCluesFromText(rawText);
+          if (parsed) { clues = parsed; aiUsed = true; }
+        } else {
+          console.error("Gemini API error:", geminiResponse.status);
+        }
+      } catch (gemErr: any) {
+        console.error("Gemini exception:", gemErr?.message);
+      }
+    }
+
+    if (!aiUsed) {
+      const isFemale = chosen.gender === "Female";
+      const isMale = chosen.gender === "Male";
+      const pronoun = isFemale ? "She" : isMale ? "He" : "This person";
+      const verb = (isFemale || isMale) ? "has" : "has";
+      const verbBe = (isFemale || isMale) ? "is" : "is";
       clues = [
-        "This person works at Sycamore.",
-        departmentName ? `They are part of the ${departmentName} department.` : "They are a valued team member.",
-        chosen.role ? `Their role involves ${chosen.role.toLowerCase()}.` : "They contribute to the company every day.",
-        tenureHint ? `They have been here for ${tenureHint}.` : "They are well-known in the office.",
-        chosen.gender === "Female" ? "She is someone you might see around the office." : "He is someone you might see around the office.",
+        "This person is a proud member of the Sycamore family.",
+        departmentName
+          ? `${pronoun} ${verbBe} part of the ${departmentName} team.`
+          : "This person brings energy and dedication to work every day.",
+        chosen.role
+          ? `Their role: ${chosen.role}.`
+          : teamName
+          ? `${pronoun} works with the ${teamName} team.`
+          : "This person is well-known across the organisation.",
+        tenureHint
+          ? `${pronoun} ${verb} been with Sycamore for ${tenureHint}.`
+          : chosen.level
+          ? `${pronoun} ${verbBe} at the ${chosen.level} level.`
+          : `${pronoun} ${verbBe} someone many colleagues interact with regularly.`,
+        chosen.level && tenureHint
+          ? `At the ${chosen.level} level, with ${tenureHint} at Sycamore${departmentName ? ` in ${departmentName}` : ""}.`
+          : `${pronoun} works${departmentName ? ` in ${departmentName}` : ""}${chosen.role ? ` as ${chosen.role}` : ""}.`,
       ];
     }
 

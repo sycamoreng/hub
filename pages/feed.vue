@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  isBotPost,
   summarizeReactions,
   type PostKind,
   type PostMention,
@@ -107,7 +108,7 @@ async function load() {
     mentionsByAnnouncement.value = annMentions
     commentCounts.value = counts
     const reactorIds = Array.from(new Set(rxs.map(r => r.user_id)))
-    const allAuthorIds = Array.from(new Set([...posts.value.map(p => p.author_id), ...reactorIds]))
+    const allAuthorIds = Array.from(new Set([...posts.value.map(p => p.author_id).filter(Boolean) as string[], ...reactorIds]))
     await loadAuthors(allAuthorIds)
   } catch (e: any) {
     error.value = e.message ?? 'Failed to load feed'
@@ -344,12 +345,13 @@ definePageMeta({ title: 'Feed' })
           v-for="p in posts"
           :key="p.id"
           :post="p"
-          :author-name="authors[p.author_id]?.name"
-          :author-avatar="authors[p.author_id]?.avatar"
-          :author-staff-id="authors[p.author_id]?.staff_id"
-          :author-initials="authors[p.author_id]?.initials"
+          :author-name="isBotPost(p) ? 'Sycamore Bot' : authors[p.author_id!]?.name"
+          :author-avatar="isBotPost(p) ? '/logo-icon.png' : authors[p.author_id!]?.avatar"
+          :author-staff-id="isBotPost(p) ? null : authors[p.author_id!]?.staff_id"
+          :author-initials="isBotPost(p) ? 'SB' : authors[p.author_id!]?.initials"
           :mentions="mentionsByPost[p.id]"
           :formatted-time="formatTime(p.created_at)"
+          :is-bot="isBotPost(p)"
         >
           <template #actions>
             <button

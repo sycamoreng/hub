@@ -62,6 +62,162 @@ async function sendViaSendGrid(args: {
   }
 }
 
+interface StaffContext {
+  full_name: string;
+  role?: string;
+  department?: string;
+  gender?: string;
+  years?: number;
+}
+
+async function generateAIMessage(
+  type: "birthday" | "anniversary",
+  person: StaffContext
+): Promise<string | null> {
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+
+  if (!anthropicKey && !geminiKey) return null;
+
+  const firstName = person.full_name.split(/\s+/)[0] || person.full_name;
+  const pronoun = person.gender === "Female" ? "her" : person.gender === "Male" ? "his" : "their";
+  const possessive = person.gender === "Female" ? "She" : person.gender === "Male" ? "He" : "They";
+
+  const context = [
+    `Name: ${person.full_name}`,
+    person.role ? `Role: ${person.role}` : null,
+    person.department ? `Department: ${person.department}` : null,
+    person.gender ? `Gender: ${person.gender}` : null,
+    type === "anniversary" && person.years ? `Years at company: ${person.years}` : null,
+  ].filter(Boolean).join("\n");
+
+  const prompt = type === "birthday"
+    ? `Write a warm, fun birthday message for a colleague at a company called Sycamore. The message should come from "Sycamore Bot" (a friendly company bot) wishing the person happy birthday on behalf of the whole team.
+
+Person details:
+${context}
+
+Rules:
+- Keep it 2-3 sentences max
+- Be warm, celebratory, and personalized to their role/department if possible
+- Use ${pronoun}/${possessive} pronouns appropriately
+- End with an invitation for colleagues to drop reactions/comments
+- Do NOT use hashtags
+- Do NOT start with "Hey everyone" or similar generic openings
+- Start directly addressing the celebration (e.g. "Happy Birthday, ${firstName}!")
+- Be creative and varied in tone - avoid generic corporate language
+- You can reference their role/department in a fun way
+
+Return ONLY the message text, no quotes or extra formatting.`
+    : `Write a warm work anniversary message for a colleague at a company called Sycamore. The message should come from "Sycamore Bot" (a friendly company bot) celebrating the person's milestone on behalf of the whole team.
+
+Person details:
+${context}
+
+Rules:
+- Keep it 2-3 sentences max
+- Be warm, celebratory, and reference their ${person.years} year${person.years === 1 ? "" : "s"} at the company
+- Personalize to their role/department if possible
+- Use ${pronoun}/${possessive} pronouns appropriately
+- End with an invitation for colleagues to drop reactions/comments
+- Do NOT use hashtags
+- Do NOT start with "Hey everyone" or similar generic openings
+- Start directly addressing the milestone (e.g. "Cheers to ${firstName}!")
+- Be creative and varied in tone - avoid generic corporate language
+- You can make playful references to their tenure or expertise
+
+Return ONLY the message text, no quotes or extra formatting.`;
+
+  function cleanResponse(text: string): string {
+    return text.replace(/```[\s\S]*?```/g, "").replace(/^["']|["']$/g, "").trim();
+  }
+
+  // Try Anthropic first
+  if (anthropicKey) {
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-3-5-sonnet-20241022",
+          max_tokens: 256,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.content?.[0]?.text;
+        if (text) return cleanResponse(text);
+      }
+    } catch { /* fall through to Gemini */ }
+  }
+
+  // Try Gemini
+  if (geminiKey) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.9, maxOutputTokens: 4096 },
+          }),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const text = parts.filter((p: any) => p.text).map((p: any) => p.text).join("");
+        if (text) return cleanResponse(text);
+      }
+    } catch { /* fall through */ }
+  }
+
+  return null;
+}
+
+async function broadcastToGoogleChat(
+  webhookUrl: string,
+  type: "birthday" | "anniversary",
+  personName: string,
+  message: string,
+  years?: number
+) {
+  const emoji = type === "birthday" ? "\u{1F382}" : "\u{1F389}";
+  const title = type === "birthday"
+    ? `${emoji} Happy Birthday, ${personName}!`
+    : `${emoji} ${personName} - ${years} Year${years === 1 ? "" : "s"} at Sycamore!`;
+
+  const card = {
+    cardsV2: [{
+      cardId: `celebration-${Date.now()}`,
+      card: {
+        header: { title, imageUrl: "https://zefhzobaostawwramtfv.supabase.co/storage/v1/object/public/public-assets/logo-icon.png" },
+        sections: [{
+          widgets: [{ textParagraph: { text: message } }],
+        }],
+      },
+    }],
+  };
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(card),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -96,11 +252,11 @@ Deno.serve(async (req: Request) => {
     // --- WORK ANNIVERSARIES ---
     const { data: anniversaryStaff } = await supabase
       .from("staff_members")
-      .select("id, full_name, email, joined_date, auth_user_id")
+      .select("id, full_name, email, joined_date, auth_user_id, role, department_id, gender")
       .eq("is_active", true)
       .not("joined_date", "is", null);
 
-    const anniversaryPeople: { id: string; full_name: string; email: string; years: number; auth_user_id: string | null }[] = [];
+    const anniversaryPeople: { id: string; full_name: string; email: string; years: number; auth_user_id: string | null; role: string; department_id: string | null; gender: string | null }[] = [];
     if (anniversaryStaff) {
       for (const row of anniversaryStaff) {
         const joined = new Date(row.joined_date);
@@ -113,6 +269,9 @@ Deno.serve(async (req: Request) => {
               email: row.email,
               years,
               auth_user_id: row.auth_user_id,
+              role: row.role || "",
+              department_id: row.department_id,
+              gender: row.gender,
             });
           }
         }
@@ -120,14 +279,39 @@ Deno.serve(async (req: Request) => {
     }
 
     // Get birthday staff details
-    let birthdayPeople: { id: string; full_name: string; email: string; auth_user_id: string | null }[] = [];
+    let birthdayPeople: { id: string; full_name: string; email: string; auth_user_id: string | null; role: string; department_id: string | null; gender: string | null }[] = [];
     if (birthdayIds.length > 0) {
       const { data } = await supabase
         .from("staff_members")
-        .select("id, full_name, email, auth_user_id")
+        .select("id, full_name, email, auth_user_id, role, department_id, gender")
         .in("id", birthdayIds)
         .eq("is_active", true);
-      birthdayPeople = data ?? [];
+      birthdayPeople = (data ?? []).map((r: any) => ({
+        id: r.id,
+        full_name: r.full_name,
+        email: r.email,
+        auth_user_id: r.auth_user_id,
+        role: r.role || "",
+        department_id: r.department_id,
+        gender: r.gender,
+      }));
+    }
+
+    // Fetch departments for context
+    const deptIds = [
+      ...birthdayPeople.map(p => p.department_id),
+      ...anniversaryPeople.map(p => p.department_id),
+    ].filter(Boolean) as string[];
+
+    let departmentMap: Record<string, string> = {};
+    if (deptIds.length > 0) {
+      const { data: depts } = await supabase
+        .from("departments")
+        .select("id, name")
+        .in("id", [...new Set(deptIds)]);
+      if (depts) {
+        for (const d of depts) departmentMap[d.id] = d.name;
+      }
     }
 
     // Get email settings and templates
@@ -160,11 +344,42 @@ Deno.serve(async (req: Request) => {
       .select("id, full_name, auth_user_id")
       .eq("is_active", true);
 
-    const results = { birthdays: 0, anniversaries: 0, notifications: 0, posts: 0 };
+    // Get celebration chat space config
+    const { data: chatConfig } = await supabase
+      .from("company_info")
+      .select("info_value")
+      .eq("info_key", "celebration_chat_space_id")
+      .maybeSingle();
+
+    let chatWebhookUrl: string | null = null;
+    const chatSpaceId = (chatConfig as any)?.info_value;
+    if (chatSpaceId) {
+      const { data: space } = await supabase
+        .from("google_chat_spaces")
+        .select("webhook_url")
+        .eq("id", chatSpaceId)
+        .eq("is_active", true)
+        .maybeSingle();
+      chatWebhookUrl = (space as any)?.webhook_url || null;
+    }
+
+    const results = { birthdays: 0, anniversaries: 0, notifications: 0, posts: 0, chat_broadcasts: 0 };
 
     // --- Send birthday notifications and create posts ---
     for (const person of birthdayPeople) {
       const firstName = person.full_name.split(/\s+/)[0] || person.full_name;
+      const department = person.department_id ? departmentMap[person.department_id] : undefined;
+
+      // Generate AI message
+      const aiMessage = await generateAIMessage("birthday", {
+        full_name: person.full_name,
+        role: person.role,
+        department,
+        gender: person.gender || undefined,
+      });
+
+      const postContent = aiMessage ||
+        `Happy Birthday, ${person.full_name}! Wishing you an amazing day and a wonderful year ahead. Drop a comment or reaction to celebrate with ${firstName}!`;
 
       // Send personal email to the birthday person
       if (sendGridKey && birthdayTemplate && birthdayTemplate.is_active) {
@@ -187,18 +402,21 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Create automated birthday post in the feed
-      if (person.auth_user_id) {
-        const postContent = `Happy Birthday, ${person.full_name}! Wishing you an amazing day and a wonderful year ahead. Drop a comment or reaction to celebrate with ${firstName}!`;
-        const { error: postErr } = await supabase.from("posts").insert({
-          author_id: person.auth_user_id,
-          content: postContent,
-          post_kind: "birthday",
-          post_type: "celebration",
-          template_data: { name: person.full_name, staff_id: person.id, auto: true },
-          is_published: true,
-        });
-        if (!postErr) results.posts++;
+      // Create bot-authored birthday post in the feed
+      const { error: postErr } = await supabase.from("posts").insert({
+        author_id: null,
+        content: postContent,
+        post_kind: "birthday",
+        post_type: "celebration",
+        template_data: { name: person.full_name, staff_id: person.id, auto: true, bot: true },
+        is_published: true,
+      });
+      if (!postErr) results.posts++;
+
+      // Broadcast to Google Chat
+      if (chatWebhookUrl) {
+        const sent = await broadcastToGoogleChat(chatWebhookUrl, "birthday", person.full_name, postContent);
+        if (sent) results.chat_broadcasts++;
       }
 
       // Create in-app notifications for everyone
@@ -227,6 +445,19 @@ Deno.serve(async (req: Request) => {
     for (const person of anniversaryPeople) {
       const firstName = person.full_name.split(/\s+/)[0] || person.full_name;
       const yearLabel = person.years === 1 ? "1 year" : `${person.years} years`;
+      const department = person.department_id ? departmentMap[person.department_id] : undefined;
+
+      // Generate AI message
+      const aiMessage = await generateAIMessage("anniversary", {
+        full_name: person.full_name,
+        role: person.role,
+        department,
+        gender: person.gender || undefined,
+        years: person.years,
+      });
+
+      const postContent = aiMessage ||
+        `Congratulations to ${person.full_name} on ${yearLabel} at Sycamore! Thank you for your dedication and contributions. Drop a comment or reaction to celebrate with ${firstName}!`;
 
       // Send personal email
       if (sendGridKey && anniversaryTemplate && anniversaryTemplate.is_active) {
@@ -251,18 +482,21 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Create automated anniversary post in the feed
-      if (person.auth_user_id) {
-        const postContent = `Congratulations to ${person.full_name} on ${yearLabel} at Sycamore! Thank you for your dedication and contributions. Drop a comment or reaction to celebrate with ${firstName}!`;
-        const { error: postErr } = await supabase.from("posts").insert({
-          author_id: person.auth_user_id,
-          content: postContent,
-          post_kind: "anniversary",
-          post_type: "celebration",
-          template_data: { name: person.full_name, years: person.years, staff_id: person.id, auto: true },
-          is_published: true,
-        });
-        if (!postErr) results.posts++;
+      // Create bot-authored anniversary post in the feed
+      const { error: postErr } = await supabase.from("posts").insert({
+        author_id: null,
+        content: postContent,
+        post_kind: "anniversary",
+        post_type: "celebration",
+        template_data: { name: person.full_name, years: person.years, staff_id: person.id, auto: true, bot: true },
+        is_published: true,
+      });
+      if (!postErr) results.posts++;
+
+      // Broadcast to Google Chat
+      if (chatWebhookUrl) {
+        const sent = await broadcastToGoogleChat(chatWebhookUrl, "anniversary", person.full_name, postContent, person.years);
+        if (sent) results.chat_broadcasts++;
       }
 
       // In-app notifications
@@ -293,6 +527,7 @@ Deno.serve(async (req: Request) => {
       anniversaries: results.anniversaries,
       notifications_sent: results.notifications,
       posts_created: results.posts,
+      chat_broadcasts: results.chat_broadcasts,
     });
   } catch (e) {
     return json({ error: (e as Error).message ?? "Unexpected error" }, 500);
