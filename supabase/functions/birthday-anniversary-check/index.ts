@@ -198,7 +198,7 @@ async function broadcastToGoogleChat(
     cardsV2: [{
       cardId: `celebration-${Date.now()}`,
       card: {
-        header: { title, imageUrl: "https://zefhzobaostawwramtfv.supabase.co/storage/v1/object/public/public-assets/logo-icon.png" },
+        header: { title },
         sections: [{
           widgets: [{ textParagraph: { text: message } }],
         }],

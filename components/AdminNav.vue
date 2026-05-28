@@ -61,7 +61,8 @@ const groups: NavGroup[] = [
       { to: '/admin/gamification', label: 'Gamification', icon: 'star', section: 'gamification' },
       { to: '/admin/leadership-qa', label: 'Leadership Q&A', icon: 'chat', section: 'leadership' },
       { to: '/admin/requests', label: 'Service Requests', icon: 'check', section: 'requests' },
-      { to: '/admin/playlists', label: 'Playlists', icon: 'sparkle', section: 'gamification' }
+      { to: '/admin/playlists', label: 'Playlists', icon: 'sparkle', section: 'gamification' },
+      { to: '/admin/digest', label: 'Hub Digest', icon: 'mail', section: 'email' }
     ]
   },
   {

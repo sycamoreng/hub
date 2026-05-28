@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { useSupabase } from '~/utils/supabase'
-import { useGamification } from '~/composables/useGamification'
 
 const supabase = useSupabase()
 const toast = useToast()
-const { awardPoints } = useGamification()
 
 type Phase = 'idle' | 'running' | 'over'
 
@@ -91,24 +89,11 @@ async function submitRun(finalScore: number, durationMs: number) {
   if (finalScore <= 0) return
   submitting.value = true
   try {
-    const { data: sess } = await supabase.auth.getUser()
-    const userId = sess.user?.id
-    if (!userId) return
-    const { error } = await supabase.from('dino_runner_scores').insert({
-      user_id: userId,
-      score: finalScore,
-      duration_ms: Math.round(durationMs)
+    const { data, error } = await supabase.rpc('dino_submit_score', {
+      p_score: Math.floor(finalScore),
+      p_duration_ms: Math.round(durationMs)
     })
     if (error) throw error
-    const points = Math.min(20, Math.max(1, Math.floor(finalScore / 100)))
-    await awardPoints({
-      userId,
-      kind: 'dino_run_completed',
-      refType: 'dino_run',
-      refId: `${userId}-${Date.now()}`,
-      points,
-      note: `Sycamore Run score ${finalScore}`
-    })
     void loadLeaderboard()
   } catch (e: any) {
     toast.error(e.message ?? 'Could not save run')

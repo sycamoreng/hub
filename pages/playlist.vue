@@ -21,6 +21,7 @@ interface Song {
   title: string
   artist: string
   url: string | null
+  thumbnail_url: string | null
   votes: number
   created_at: string
   submitter_name?: string
@@ -41,6 +42,9 @@ const showCreatePlaylist = ref(false)
 const playlistForm = ref({ theme: '' })
 const editingPlaylistId = ref<string | null>(null)
 const confirmDeletePlaylist = ref<string | null>(null)
+const linkParsing = ref(false)
+const linkError = ref('')
+const parsedThumbnail = ref<string | null>(null)
 
 const moodGradients: Record<string, string> = {
   'chill': 'from-sky-400 via-blue-500 to-sky-700',
@@ -180,6 +184,49 @@ async function toggleVote(song: Song) {
   setTimeout(() => { animatingVote.value = null }, 400)
 }
 
+function isMusicLink(url: string): boolean {
+  if (!url) return false
+  const lower = url.toLowerCase()
+  return lower.includes('spotify.com') || lower.includes('spotify.link') ||
+    lower.includes('music.apple.com') ||
+    lower.includes('youtube.com') || lower.includes('youtu.be') || lower.includes('music.youtube.com')
+}
+
+async function parseMusicLink() {
+  const url = songForm.value.url.trim()
+  if (!url || !isMusicLink(url)) return
+  linkParsing.value = true
+  linkError.value = ''
+  parsedThumbnail.value = null
+  try {
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/song-metadata`
+    const { data: sess } = await supabase.auth.getSession()
+    const token = sess.session?.access_token
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ url })
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      linkError.value = data.error || 'Could not parse this link'
+      return
+    }
+    songForm.value.title = data.title || songForm.value.title
+    songForm.value.artist = data.artist || songForm.value.artist
+    parsedThumbnail.value = data.thumbnail_url || null
+    success('Song details auto-filled!')
+  } catch (e: any) {
+    linkError.value = 'Network error — you can still fill in the details manually.'
+  } finally {
+    linkParsing.value = false
+  }
+}
+
 async function addSong() {
   if (!songForm.value.title.trim() || !songForm.value.artist.trim() || !user.value || !currentPlaylist.value) return
   submitting.value = true
@@ -188,12 +235,15 @@ async function addSong() {
     submitted_by: user.value.id,
     title: songForm.value.title.trim(),
     artist: songForm.value.artist.trim(),
-    url: songForm.value.url.trim() || null
+    url: songForm.value.url.trim() || null,
+    thumbnail_url: parsedThumbnail.value || null
   })
   if (error) toastError('Failed to add song')
   else {
     success('Song added to the playlist!')
     songForm.value = { title: '', artist: '', url: '' }
+    parsedThumbnail.value = null
+    linkError.value = ''
     showAddSong.value = false
     await loadSongs(currentPlaylist.value.id)
   }
@@ -329,7 +379,7 @@ watch(ready, (r) => { if (r) load() }, { immediate: true })
                 </h1>
                 <p class="mt-2 text-white/70 text-xs sm:text-sm">Week of {{ formatWeek(currentPlaylist.week_start) }} -- {{ songs.length }} songs submitted</p>
               </div>
-              <button @click="showAddSong = true" class="shrink-0 inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur text-white font-semibold text-xs sm:text-sm hover:bg-white/30 transition-colors">
+              <button @click="showAddSong = true; songForm = { title: '', artist: '', url: '' }; linkError = ''; parsedThumbnail = null" class="shrink-0 inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white/20 ring-1 ring-white/30 backdrop-blur text-white font-semibold text-xs sm:text-sm hover:bg-white/30 transition-colors">
                 + Add Song
               </button>
             </div>
@@ -351,7 +401,7 @@ watch(ready, (r) => { if (r) load() }, { immediate: true })
           <div class="text-5xl mb-3">🎶</div>
           <h3 class="text-lg font-bold text-slate-900">This playlist is empty</h3>
           <p class="text-slate-500 mt-1">Be the first to add a track!</p>
-          <button @click="showAddSong = true" class="btn-primary mt-4">Add a Song</button>
+          <button @click="showAddSong = true; songForm = { title: '', artist: '', url: '' }; linkError = ''; parsedThumbnail = null" class="btn-primary mt-4">Add a Song</button>
         </div>
         <div v-else class="space-y-2">
           <div
@@ -360,28 +410,36 @@ watch(ready, (r) => { if (r) load() }, { immediate: true })
             class="group relative card px-4 py-3 flex items-center gap-4 hover:shadow-md transition-all"
             :class="{ 'ring-2 ring-sycamore-200': animatingVote === song.id }"
           >
-            <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+            <div v-if="song.thumbnail_url" class="w-10 h-10 rounded-lg overflow-hidden shrink-0 shadow-sm">
+              <img :src="song.thumbnail_url" :alt="song.title" class="w-full h-full object-cover">
+            </div>
+            <div v-else class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
               :class="i === 0 ? 'bg-gradient-to-br from-amber-300 to-amber-500 text-white shadow-sm' : i === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white' : i === 2 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white' : 'bg-slate-100 text-slate-500'"
             >{{ i + 1 }}</div>
 
-            <div class="flex-1 min-w-0">
+            <a
+              :href="song.url || undefined"
+              :target="song.url ? '_blank' : undefined"
+              rel="noopener"
+              class="flex-1 min-w-0"
+              :class="song.url ? 'cursor-pointer' : 'cursor-default'"
+              @click.stop="!song.url && openInSpotifySearch(song)"
+            >
               <div class="flex items-center gap-2">
                 <span class="font-semibold text-slate-900 truncate text-sm">{{ song.title }}</span>
+                <span v-if="song.url && detectPlatform(song.url)" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white shrink-0" :class="platformIcon(detectPlatform(song.url)!).bg">
+                  {{ platformIcon(detectPlatform(song.url)!).label }}
+                </span>
               </div>
               <div class="flex items-center gap-2 text-[11px] sm:text-xs text-slate-500 mt-0.5">
                 <span class="truncate">{{ song.artist }}</span>
                 <span class="text-slate-300">|</span>
                 <span class="truncate">{{ song.submitter_name }}</span>
               </div>
-            </div>
+            </a>
 
             <div class="hidden sm:flex items-center gap-1.5">
-              <template v-if="song.url && detectPlatform(song.url)">
-                <a :href="song.url" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold text-white transition-transform hover:scale-105" :class="platformIcon(detectPlatform(song.url)!).bg">
-                  {{ platformIcon(detectPlatform(song.url)!).label }}
-                </a>
-              </template>
-              <template v-else>
+              <template v-if="!song.url">
                 <button @click="openInSpotifySearch(song)" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-[#1DB954]/10 text-[#1DB954] hover:bg-[#1DB954]/20 transition-colors">
                   Spotify
                 </button>
@@ -500,10 +558,47 @@ watch(ready, (r) => { if (r) load() }, { immediate: true })
           <div class="w-10 h-10 rounded-xl bg-sycamore-100 flex items-center justify-center text-xl">🎵</div>
           <div>
             <h2 class="text-lg font-bold text-slate-900">Add a Song</h2>
-            <p class="text-xs text-slate-500">Share what you're listening to</p>
+            <p class="text-xs text-slate-500">Paste a link and we'll fill in the rest</p>
           </div>
         </div>
         <div class="space-y-3">
+          <!-- Link input (primary action) -->
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Paste a streaming link</label>
+            <div class="flex gap-2">
+              <input
+                v-model="songForm.url"
+                class="input flex-1"
+                placeholder="Spotify, YouTube or Apple Music link"
+                @paste="() => { nextTick(parseMusicLink) }"
+              >
+              <button
+                @click="parseMusicLink"
+                :disabled="!songForm.url.trim() || linkParsing || !isMusicLink(songForm.url)"
+                class="btn-secondary shrink-0 text-xs px-3"
+              >
+                {{ linkParsing ? 'Fetching...' : 'Fetch' }}
+              </button>
+            </div>
+            <p v-if="linkError" class="text-xs text-rose-600 mt-1">{{ linkError }}</p>
+            <p v-else class="text-[11px] text-slate-400 mt-1">Supports Spotify, YouTube, and Apple Music links</p>
+          </div>
+
+          <!-- Parsed result preview -->
+          <div v-if="parsedThumbnail || (songForm.title && songForm.artist && songForm.url)" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <img v-if="parsedThumbnail" :src="parsedThumbnail" class="w-12 h-12 rounded-lg object-cover shrink-0" alt="">
+            <div v-else class="w-12 h-12 rounded-lg bg-slate-200 flex items-center justify-center shrink-0 text-lg">🎶</div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-semibold text-slate-900 truncate">{{ songForm.title || 'Song title' }}</p>
+              <p class="text-xs text-slate-500 truncate">{{ songForm.artist || 'Artist' }}</p>
+            </div>
+          </div>
+
+          <div class="relative">
+            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
+            <div class="relative flex justify-center"><span class="bg-white px-3 text-[11px] text-slate-400 uppercase tracking-wide">or fill manually</span></div>
+          </div>
+
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">Song Title</label>
             <input v-model="songForm.title" class="input" placeholder="e.g. Bohemian Rhapsody">
@@ -512,13 +607,9 @@ watch(ready, (r) => { if (r) load() }, { immediate: true })
             <label class="block text-xs font-medium text-slate-600 mb-1">Artist</label>
             <input v-model="songForm.artist" class="input" placeholder="e.g. Queen">
           </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1">Spotify / YouTube Link (optional)</label>
-            <input v-model="songForm.url" class="input" placeholder="Paste a link so others can listen">
-          </div>
         </div>
         <div class="flex justify-end gap-2 mt-5">
-          <button @click="showAddSong = false" class="btn-secondary">Cancel</button>
+          <button @click="showAddSong = false; linkError = ''; parsedThumbnail = null" class="btn-secondary">Cancel</button>
           <button @click="addSong" :disabled="!songForm.title.trim() || !songForm.artist.trim() || submitting" class="btn-primary">
             {{ submitting ? 'Adding...' : 'Add to Playlist' }}
           </button>

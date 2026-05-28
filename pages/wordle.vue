@@ -143,7 +143,9 @@ async function submit() {
     }
   } catch (e: any) {
     triggerShake(rowIdx)
-    toast.error(e.message ?? 'Invalid guess')
+    const msg = (e.message ?? '').toLowerCase()
+    if (msg.includes('not a valid word')) toast.error('Not in word list. Try a real word.')
+    else toast.error(e.message ?? 'Invalid guess')
   } finally {
     submitting.value = false
   }

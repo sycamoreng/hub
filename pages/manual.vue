@@ -32,7 +32,8 @@ const sections: Section[] = [
     items: [
       { name: 'Reading the feed', detail: 'The Feed page streams posts from across the company. React with emoji, leave comments, and use @mentions to bring a colleague into the conversation.' },
       { name: 'Creating a post', detail: 'Tap the Post button on the feed. You can pick a template (birthday, anniversary, mood, milestone, kudos, welcome or congrats), attach an image, and tag colleagues with @mentions.' },
-      { name: 'Announcements', detail: 'Admins publish company-wide announcements that appear pinned at the top of the feed with their own image and call-to-action.' }
+      { name: 'Announcements', detail: 'Admins publish company-wide announcements that appear pinned at the top of the feed with their own image and call-to-action.' },
+      { name: 'Celebration Bot', detail: 'Birthdays and work anniversaries are automatically posted by the Sycamore Bot — a friendly AI-powered bot that crafts personalised messages based on the person\u2019s role and department. These posts also appear in the company Google Chat space. Drop a reaction or comment to celebrate with your colleague.' }
     ]
   },
   {
@@ -81,9 +82,10 @@ const sections: Section[] = [
     intro: 'Quick daily games that keep the hub lively and earn you leaderboard points.',
     items: [
       { name: 'Daily Spark', detail: 'A single multiple-choice question (A/B/C/D) appears on the home page each day. Pick an answer to score — a correct answer earns the full points.' },
-      { name: 'Daily Wordle', detail: 'Guess the word of the day within the allowed attempts. A win adds points to your leaderboard total and unlocks streak badges.' },
-      { name: 'Typing Sprint', detail: 'Test your typing speed on the Typing Sprint page. Race against yourself or challenge colleagues in real-time multiplayer matches. Your best WPM appears on the leaderboard.' },
-      { name: 'Dino Runner', detail: 'A quick endless-runner game accessible from the sidebar. Compete for high scores against your colleagues on the Dino Runner leaderboard.' }
+      { name: 'Daily Wordle', detail: 'Guess the word of the day within the allowed attempts. Only real English words are accepted — random letter combinations will be rejected. A win adds points to your leaderboard total and unlocks streak badges.' },
+      { name: 'Typing Sprint', detail: 'Test your typing speed on the Typing Sprint page. Race against yourself or challenge colleagues in real-time multiplayer matches. Your best WPM appears on the leaderboard. Note: pasting text is disabled to keep it fair.' },
+      { name: 'Dino Runner', detail: 'A quick endless-runner game accessible from the sidebar. Compete for high scores against your colleagues on the Dino Runner leaderboard. Scores are validated server-side.' },
+      { name: 'Guess Who', detail: 'Each day a mystery colleague photo is revealed. You get limited guesses to identify who it is — earn points for correct guesses. A new face appears daily.' }
     ]
   },
   {
@@ -114,12 +116,25 @@ const sections: Section[] = [
     items: [
       { name: 'Staff directory', detail: 'Search the Staff Directory by name, role or department. Click a profile to see contact details and reporting line.' },
       { name: 'My Team and Departments', detail: 'My Team shows your direct reports and peers. Departments lists every department with its head and members. Team leads and heads are highlighted.' },
-      { name: 'Leadership and Organogram', detail: 'The Leadership page features the senior team and their focus areas. The Organogram page visualises the full reporting chain.' }
+      { name: 'Leadership and Organogram', detail: 'The Leadership page features the senior team and their focus areas. The Organogram page visualises the full reporting chain.' },
+      { name: 'Ask Leadership', detail: 'Submit anonymous or named questions to the leadership team. Questions are reviewed and answered publicly so everyone benefits from the response.' },
+      { name: 'Celebrations', detail: 'View upcoming birthdays and work anniversaries across the company. Celebrations are also announced automatically by the Sycamore Bot in the feed and Google Chat.' }
+    ]
+  },
+  {
+    id: 'social',
+    title: '11. Social & Wellbeing',
+    intro: 'Fun, photos and looking after yourself.',
+    items: [
+      { name: 'Photo Wall', detail: 'A shared gallery where colleagues upload and browse team photos — events, celebrations, team outings and everyday moments.' },
+      { name: 'Playlist of the Week', detail: 'A shared music playlist updated weekly. Discover what your colleagues are listening to and suggest tracks.' },
+      { name: 'Burnout Dashboard', detail: 'Check in on your energy levels and view aggregate wellbeing data across the company. Responses are anonymous and help the People team spot trends early.' },
+      { name: 'Service Requests', detail: 'Submit requests to internal service teams (IT, Facilities, etc.). Track the status of your requests and get notified when they are resolved.' }
     ]
   },
   {
     id: 'communication',
-    title: '11. Communication',
+    title: '12. Communication',
     intro: 'Company-wide messages, chat and the shared calendar.',
     items: [
       { name: 'Communication hub', detail: 'The Communication page collects announcements, broadcasts and key messages in one stream for easy reference.' },
@@ -129,7 +144,7 @@ const sections: Section[] = [
   },
   {
     id: 'admin',
-    title: '12. For Admins',
+    title: '13. For Admins',
     intro: 'Everything behind the Admin menu.',
     items: [
       { name: 'Company setup', detail: 'Configure company details, locations, departments and leadership from the Admin section.' },
@@ -137,14 +152,14 @@ const sections: Section[] = [
       { name: 'Content', detail: 'Curate policies, benefits, products, technology, contacts, onboarding modules, learning assignments and email templates.' },
       { name: 'Gamification', detail: 'Adjust point weights, kudos values, badges (including bonus points) and Daily Sparks.' },
       { name: 'Operations', detail: 'Run payroll, approve leave, review finance requests, manage attendance, schedule templates and appointments.' },
-      { name: 'Integrations', detail: 'Configure Google chat spaces and broadcasts for reaching every channel at once.' },
+      { name: 'Integrations', detail: 'Configure Google Chat spaces and broadcasts for reaching every channel at once. You can also set which space receives automatic celebration messages for birthdays and anniversaries.' },
       { name: 'Chatbot & Knowledge Base', detail: 'Configure the AI assistant, upload documents to the knowledge base (policies, manuals, guides), and manage what the chatbot knows. Uploaded files are automatically chunked and made searchable.' },
       { name: 'Audit log', detail: 'Super admins can view a full history of all admin actions — who did what and when. Filter by admin, action type or section. Last-active timestamps are visible on the Admin Access page.' }
     ]
   },
   {
     id: 'support',
-    title: '13. Getting Help',
+    title: '14. Getting Help',
     items: [
       { name: 'In-app assistant', detail: 'The chat widget is available on every page. Ask anything about company info — it pulls from policies, benefits, products, technology and contacts.' },
       { name: 'Escalation', detail: 'For anything the assistant cannot resolve, contact your manager, the admin team, or the relevant department head listed on the Departments or Leadership pages.' }
@@ -173,7 +188,7 @@ const sections: Section[] = [
         <div class="text-xs uppercase tracking-widest text-sycamore-700 font-semibold mb-2">Sycamore Info Hub</div>
         <h2 class="text-2xl sm:text-4xl font-bold text-slate-900 mb-2">Staff Operating Manual</h2>
         <p class="text-slate-600">A practical guide for everyone at Sycamore — what lives on the hub and how to use it.</p>
-        <p class="text-sm text-slate-500 mt-4">Version 1.1 &middot; {{ today }}</p>
+        <p class="text-sm text-slate-500 mt-4">Version 1.2 &middot; {{ today }}</p>
       </header>
 
       <nav class="mb-10 print-toc">

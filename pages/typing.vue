@@ -163,11 +163,23 @@ function start() {
   tickHandle = requestAnimationFrame(tick)
 }
 
+function onPaste(e: Event) {
+  e.preventDefault()
+}
+
 function onInput(e: Event) {
   if (phase.value !== 'running') return
-  const value = (e.target as HTMLTextAreaElement).value
+  const el = e.target as HTMLTextAreaElement
+  const value = el.value
+
+  // Reject bulk input (paste bypass) — allow at most 2 new chars per event
+  const diff = value.length - typed.value.length
+  if (diff > 2) {
+    el.value = typed.value
+    return
+  }
+
   typed.value = value
-  // Recompute counters for the typed prefix vs target
   let mistakes = 0
   let correct = 0
   for (let i = 0; i < value.length; i++) {
@@ -359,6 +371,8 @@ onBeforeUnmount(() => { if (tickHandle) cancelAnimationFrame(tickHandle) })
           id="typing-input"
           :value="typed"
           @input="onInput"
+          @paste="onPaste"
+          @drop.prevent
           rows="3"
           autocapitalize="off"
           spellcheck="false"
