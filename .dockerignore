@@ -1,0 +1,15 @@
+node_modules
+.output
+.nuxt
+.git
+.github
+.vscode
+.idea
+*.log
+.env*
+Dockerfile
+.dockerignore
+README.md
+coverage
+.bolt
+supabase
