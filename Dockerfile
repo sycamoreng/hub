@@ -33,7 +33,4 @@ COPY --from=build --chown=nuxt:nuxt /app/.output ./.output
 USER 1994
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=15s \
-  CMD wget -qO- http://localhost:3000/ || exit 1
-
 CMD ["node", ".output/server/index.mjs"]
