@@ -1,4 +1,32 @@
-# Transitive deps from Nuxt/Vite. Tracked for upgrade.
-# Owner: DevOps. Review by: 2026-09-01.
-CVE-2026-42570  # devalue 5.7.1 -> fix in 5.8.1 (Nuxt/Nitro transitive)
-CVE-2026-33671  # picomatch 4.0.3 -> fix in 4.0.4 (Vite/Rollup transitive)
+# =============================================================================
+# Hub (Nuxt 3 SSR)
+# =============================================================================
+# All entries below are upstream/structural vulnerabilities with no actionable
+# fix in the hub repo. Categorized by source.
+#
+# Review schedule: every release cycle. Remove entries once upstream ships a fix.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Nuxt transitives — devalue, picomatch
+# -----------------------------------------------------------------------------
+# devalue@5.7.1 — pulled in via Nuxt/Nitro. Fix in 5.8.1.
+# TODO: resolve via package.json "resolutions", then remove from this file.
+CVE-2026-42570
+# picomatch@4.0.3 — pulled in via Vite/Rollup. Fix in 4.0.4.
+# TODO: resolve via package.json "resolutions", then remove from this file.
+CVE-2026-33671
+
+# -----------------------------------------------------------------------------
+# Alpine OS — node:22-alpine base
+# -----------------------------------------------------------------------------
+# Wait for upstream node:22-alpine image refresh
+
+# -----------------------------------------------------------------------------
+# Node transitives — locked by upstream
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# esbuild / Nuxt-bundled Go binaries
+# -----------------------------------------------------------------------------
+# Requires upstream Nuxt module to ship a newer binary build
