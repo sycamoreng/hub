@@ -63,18 +63,17 @@ jobs:
           template: "@trivy-html.tpl"
           output: trivy-image-report.html
 
-      - name: Trivy fs scan (secrets + misconfig)
+      - name: Trivy fs scan
         id: trivy_fs
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: fs
           scan-ref: .
-          scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           trivyignores: .trivyignore
-          exit-code: 1
+          exit-code: "1"
           format: template
           template: "@trivy-html.tpl"
           output: trivy-fs-report.html
