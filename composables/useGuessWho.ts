@@ -6,10 +6,16 @@ export interface GuessEntry {
   correct: boolean
 }
 
+export interface ClueItem {
+  category: string
+  text: string
+  avatar_url?: string
+}
+
 export interface GuessWhoState {
   status: 'active' | 'no_puzzle'
   puzzle_date: string
-  clues: string[]
+  clues: (string | ClueItem)[]
   has_avatar: boolean
   guesses: GuessEntry[]
   used_photo_hint: boolean
@@ -96,13 +102,24 @@ export function useGuessWho() {
     }
   }
 
-  const revealedClues = computed(() => {
+  const revealedClues = computed<ClueItem[]>(() => {
     if (!state.value) return []
     const guessCount = state.value.guesses.length
-    // Reveal clues progressively: first clue always shown, then one more per guess
     const count = Math.min(state.value.clues.length, guessCount + 1)
-    return state.value.clues.slice(0, count)
+    return state.value.clues.slice(0, count).map(c => parseClue(c))
   })
+
+  function parseClue(c: string | ClueItem): ClueItem {
+    if (typeof c === 'object' && c !== null && 'text' in c) return c as ClueItem
+    if (typeof c === 'string') {
+      try {
+        const parsed = JSON.parse(c)
+        if (parsed && parsed.text) return parsed as ClueItem
+      } catch {}
+      return { category: 'vibe', text: c }
+    }
+    return { category: 'vibe', text: String(c) }
+  }
 
   const guessesRemaining = computed(() => {
     if (!state.value) return 0

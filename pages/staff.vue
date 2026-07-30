@@ -2,36 +2,45 @@
 import type { UserProfile } from '~/composables/useProfile'
 import { useSupabase } from '~/utils/supabase'
 
-const { fetchStaff, fetchDepartments } = useCompanyData()
+const { fetchStaff, fetchDepartments, fetchLocations } = useCompanyData()
 const { fetchProfilesByUserIds } = useProfile()
 const { user, profileSyncTick } = useAuth()
 const supabase = useSupabase()
+const route = useRoute()
 
 const staff = ref<any[]>([])
 const exited = ref<any[]>([])
 const departments = ref<any[]>([])
+const locations = ref<any[]>([])
 const profilesByUid = ref<Record<string, UserProfile>>({})
 const search = ref('')
 const selectedDept = ref('All')
+const selectedLocation = ref('All')
 const loading = ref(true)
 const view = ref<'active' | 'new_hires' | 'exited'>('active')
 
 async function load() {
   loading.value = true
   try {
-    const [s, d, ex] = await Promise.all([
+    const [s, d, locs, ex] = await Promise.all([
       fetchStaff(),
       fetchDepartments(),
+      fetchLocations(),
       supabase.from('staff_directory_exited').select('*').order('full_name')
     ])
     staff.value = s
     departments.value = d
+    locations.value = locs
     exited.value = (ex.data ?? []) as any[]
     const uids = [
       ...(s as any[]).map(r => r.auth_user_id).filter(Boolean),
       ...(exited.value as any[]).map(r => r.auth_user_id).filter(Boolean)
     ]
     profilesByUid.value = uids.length ? await fetchProfilesByUserIds(uids) : {}
+    const locQuery = (route.query.location as string | undefined)
+    if (locQuery) {
+      selectedLocation.value = locQuery
+    }
   } finally { loading.value = false }
 }
 
@@ -43,6 +52,8 @@ const filtered = computed(() => {
   return staff.value.filter(s => {
     const deptOk = selectedDept.value === 'All' || s.departments?.name === selectedDept.value
     if (!deptOk) return false
+    const locOk = selectedLocation.value === 'All' || s.locations?.name === selectedLocation.value
+    if (!locOk) return false
     if (!q) return true
     return s.full_name.toLowerCase().includes(q) || s.role.toLowerCase().includes(q) || s.email.toLowerCase().includes(q)
   })
@@ -62,6 +73,8 @@ const filteredNewHires = computed(() => {
   return newHires.value.filter(s => {
     const deptOk = selectedDept.value === 'All' || s.departments?.name === selectedDept.value
     if (!deptOk) return false
+    const locOk = selectedLocation.value === 'All' || s.locations?.name === selectedLocation.value
+    if (!locOk) return false
     if (!q) return true
     return s.full_name.toLowerCase().includes(q) || s.role.toLowerCase().includes(q) || s.email.toLowerCase().includes(q)
   })
@@ -72,6 +85,8 @@ const filteredExited = computed(() => {
   return exited.value.filter(s => {
     const deptOk = selectedDept.value === 'All' || s.department_name === selectedDept.value
     if (!deptOk) return false
+    const locOk = selectedLocation.value === 'All' || s.location_name === selectedLocation.value
+    if (!locOk) return false
     if (!q) return true
     return (s.full_name || '').toLowerCase().includes(q)
       || (s.role || '').toLowerCase().includes(q)
@@ -127,6 +142,10 @@ function avatar(s: any): string | null {
       <select v-model="selectedDept" class="input sm:w-56">
         <option value="All">All departments</option>
         <option v-for="d in departments" :key="d.id" :value="d.name">{{ d.name }}</option>
+      </select>
+      <select v-model="selectedLocation" class="input sm:w-56">
+        <option value="All">All locations</option>
+        <option v-for="l in locations" :key="l.id" :value="l.name">{{ l.name }}</option>
       </select>
     </div>
 

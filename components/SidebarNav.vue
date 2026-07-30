@@ -36,7 +36,9 @@ const rewardsGroup = computed<NavGroup>(() => {
     { to: '/guess-who', label: 'Guess Who', icon: 'sparkle' },
     { to: '/wordle', label: 'Daily Wordle', icon: 'sparkle' },
     { to: '/typing', label: 'Typing Sprint', icon: 'sparkle' },
-    { to: '/dino', label: 'Sycamore Run', icon: 'sparkle' }
+    { to: '/dino', label: 'Sycamore Run', icon: 'sparkle' },
+    { to: '/codebreaker', label: 'Code Breaker', icon: 'sparkle' },
+    { to: '/crossword', label: 'Mini Crossword', icon: 'sparkle' }
   ]
   if (raffleVisible.value) {
     items.push({ to: '/raffle', label: "Workers' Day Raffle", icon: 'gift' })
@@ -106,6 +108,7 @@ const baseGroups = computed<NavGroup[]>(() => [
     label: 'Social & Fun',
     icon: 'sparkle',
     items: [
+      { to: '/forums', label: 'Forums', icon: 'chat' },
       { to: '/photos', label: 'Photo Wall', icon: 'palette' },
       { to: '/playlist', label: 'Playlist of the Week', icon: 'sparkle' }
     ]

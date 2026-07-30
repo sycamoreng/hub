@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
 
     // --- Build system prompt ---
     const systemParts = [
-      settings.system_prompt || "You are an internal assistant for Sycamore staff.",
+      settings.system_prompt || "You are an internal assistant for Sycamore, a fintech company in Lagos. Sycamore staff members are called Sytizens \u2014 always use that term when referring to staff.",
       `Tone: ${settings.response_tone || "friendly and professional"}.`,
       settings.allowed_topics ? `You are allowed to discuss: ${settings.allowed_topics}.` : "",
       settings.blocked_topics ? `Refuse to discuss: ${settings.blocked_topics}. Politely redirect to relevant topics.` : "",

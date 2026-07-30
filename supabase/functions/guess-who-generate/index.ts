@@ -19,7 +19,6 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Check if today's puzzle already exists
     const today = new Date().toISOString().split("T")[0];
     const { data: existing } = await supabase
       .from("guess_who_puzzles")
@@ -34,11 +33,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get all active staff with relevant info
     const { data: staff } = await supabase
       .from("staff_members")
       .select(
-        "id, full_name, role, bio, joined_date, gender, department_id, team_id, level"
+        "id, full_name, role, bio, joined_date, gender, department_id, team_id, level, location_id, manager_id"
       )
       .eq("is_active", true)
       .eq("directory_visible", true);
@@ -50,7 +48,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get recently used staff (last 30 days) to avoid repeats
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const { data: recentPuzzles } = await supabase
@@ -62,10 +59,9 @@ Deno.serve(async (req: Request) => {
     const eligible = staff.filter((s: any) => !recentIds.has(s.id));
     const pool = eligible.length > 0 ? eligible : staff;
 
-    // Pick a random staff member
     const chosen = pool[Math.floor(Math.random() * pool.length)];
 
-    // Get department name
+    // Gather rich context
     let departmentName = "";
     if (chosen.department_id) {
       const { data: dept } = await supabase
@@ -76,7 +72,6 @@ Deno.serve(async (req: Request) => {
       departmentName = dept?.name || "";
     }
 
-    // Get team name
     let teamName = "";
     if (chosen.team_id) {
       const { data: team } = await supabase
@@ -87,7 +82,35 @@ Deno.serve(async (req: Request) => {
       teamName = team?.name || "";
     }
 
-    // Check if they have an avatar
+    let locationName = "";
+    let cityName = "";
+    if (chosen.location_id) {
+      const { data: loc } = await supabase
+        .from("locations")
+        .select("name, city")
+        .eq("id", chosen.location_id)
+        .maybeSingle();
+      locationName = loc?.name || "";
+      cityName = loc?.city || "";
+    }
+
+    let managerName = "";
+    if (chosen.manager_id) {
+      const { data: mgr } = await supabase
+        .from("staff_members")
+        .select("full_name")
+        .eq("id", chosen.manager_id)
+        .maybeSingle();
+      managerName = mgr?.full_name || "";
+    }
+
+    const { data: reports } = await supabase
+      .from("staff_members")
+      .select("id")
+      .eq("manager_id", chosen.id)
+      .eq("is_active", true);
+    const directReportsCount = reports?.length ?? 0;
+
     const { data: authStaff } = await supabase
       .from("staff_members")
       .select("auth_user_id")
@@ -104,62 +127,99 @@ Deno.serve(async (req: Request) => {
       hasAvatar = !!(profile?.avatar_url && profile.avatar_url.trim() !== "");
     }
 
-    // Calculate tenure
+    // Calculate tenure details
     let tenureHint = "";
+    let joinMonth = "";
+    let joinYear = "";
     if (chosen.joined_date) {
       const joined = new Date(chosen.joined_date);
       const now = new Date();
-      const years = Math.floor(
-        (now.getTime() - joined.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
-      );
-      if (years < 1) tenureHint = "less than a year";
-      else if (years === 1) tenureHint = "about a year";
-      else tenureHint = `about ${years} years`;
+      const months = (now.getFullYear() - joined.getFullYear()) * 12 + (now.getMonth() - joined.getMonth());
+      joinMonth = joined.toLocaleString("en-US", { month: "long" });
+      joinYear = String(joined.getFullYear());
+      if (months < 6) tenureHint = "less than 6 months";
+      else if (months < 12) tenureHint = "less than a year";
+      else if (months < 18) tenureHint = "about a year";
+      else tenureHint = `about ${Math.floor(months / 12)} years`;
     }
 
-    // Build context for AI
+    // Count peers in same department
+    let deptSize = 0;
+    if (chosen.department_id) {
+      const { data: peers } = await supabase
+        .from("staff_members")
+        .select("id")
+        .eq("department_id", chosen.department_id)
+        .eq("is_active", true);
+      deptSize = peers?.length ?? 0;
+    }
+
+    // Build rich context for AI
     const context = [
       `Full name: ${chosen.full_name}`,
       chosen.role ? `Role/title: ${chosen.role}` : "",
-      departmentName ? `Department: ${departmentName}` : "",
+      departmentName ? `Department: ${departmentName} (${deptSize} people in this department)` : "",
       teamName ? `Team: ${teamName}` : "",
+      locationName ? `Office: ${locationName}${cityName ? ` in ${cityName}` : ""}` : "",
       chosen.gender ? `Gender: ${chosen.gender}` : "",
-      chosen.level ? `Level: ${chosen.level}` : "",
+      chosen.level ? `Level/seniority: ${chosen.level}` : "",
+      managerName ? `Reports to: ${managerName}` : "",
+      directReportsCount > 0 ? `Manages ${directReportsCount} direct report${directReportsCount > 1 ? "s" : ""}` : "Individual contributor (no direct reports)",
       tenureHint ? `Has been with the company for ${tenureHint}` : "",
-      chosen.bio ? `Bio: ${chosen.bio}` : "",
+      joinMonth && joinYear ? `Joined in ${joinMonth} ${joinYear}` : "",
+      chosen.bio ? `Bio/about: ${chosen.bio}` : "",
     ]
       .filter(Boolean)
       .join("\n");
 
-    // Generate clues - try Anthropic first, then Gemini, fall back to deterministic
     let clues: string[];
     let aiUsed = false;
 
-    const cluePrompt = `You are generating clues for a "Guess Who" game at a company called Sycamore. Staff will try to guess which colleague is being described based on your clues.
+    const cluePrompt = `You are generating clues for a "Guess Who" game at a company called Sycamore (a fintech in Lagos, Nigeria). Sycamore staff members are called Sytizens. Other Sytizens will try to guess which Sytizen is being described.
 
-Here is information about the mystery person:
+Here is everything we know about the mystery person:
 ${context}
 
-Generate exactly 5 clues, ordered from most vague to most specific. The clues should be fun, creative, and descriptive without directly revealing the person's name. Use wordplay, metaphors, or creative descriptions where possible.
+Generate exactly 5 clues as a JSON array. Each clue should be a JSON object with "category" and "text" fields.
+
+Categories to use (pick the most fitting for each clue):
+- "vibe" (personality/energy/work-style observation)
+- "location" (office, city, workspace)
+- "team" (department, team, who they work with)
+- "role" (what they do, their craft, responsibilities)
+- "tenure" (how long they've been around, when they joined)
+- "connections" (who they report to, how many people they manage, cross-team work)
+- "fun_fact" (anything quirky, creative, or memorable about them)
 
 Rules:
-- NEVER include the person's first name, last name, or any part of their name in any clue
+- NEVER include the person's first name, last name, or any part of their name
 - NEVER include their email address
-- Clue 1 should be very vague (could apply to many people)
-- Clue 2 should narrow it down slightly
-- Clue 3 should give a moderate hint
-- Clue 4 should be quite specific
-- Clue 5 should make it fairly clear if you know the person
+- Clue 1: Very vague, atmospheric, could apply to many people (use "vibe" or "fun_fact")
+- Clue 2: Slightly narrowing — location or broad team hint
+- Clue 3: Moderate hint — role type or connections
+- Clue 4: Quite specific — exact department or reporting line
+- Clue 5: Very specific — makes it clear if you know the person (combine role + tenure + team details)
+- Be creative, playful, use metaphors and wordplay where possible
+- Write in a warm, fun tone — like a fellow Sytizen describing someone at a team social
+- IMPORTANT: The ONLY correct term for a Sycamore staff member is "Sytizen". NEVER use "Sycamorite", "Sycamorean", "Sycamorer", or any other invented variation. If you refer to staff at all, always say "Sytizen(s)".
 
-Return ONLY a JSON array of 5 strings, no other text. Example format:
-["clue 1", "clue 2", "clue 3", "clue 4", "clue 5"]`;
+Return ONLY a JSON array, no other text. Example:
+[{"category":"vibe","text":"This person brings sunshine energy to every standup."},{"category":"location","text":"You'll find them in the city that never sleeps... on the Mainland."},{"category":"team","text":"Their crew keeps customers smiling."},{"category":"role","text":"They lead the charge on user satisfaction metrics."},{"category":"connections","text":"With 5 people looking up to them, they've been shaping CX since 2022."}]`;
 
-    function parseCluesFromText(rawText: string): string[] | null {
+    function parseCluesFromText(rawText: string): Array<{ category: string; text: string }> | null {
       const cleaned = rawText.replace(/```(?:json)?\s*/g, "").replace(/```/g, "").trim();
       const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
       try {
         const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
-        if (Array.isArray(parsed) && parsed.length === 5) return parsed;
+        if (Array.isArray(parsed) && parsed.length === 5) {
+          if (typeof parsed[0] === "string") {
+            return parsed.map((t: string, i: number) => ({
+              category: ["vibe", "location", "team", "role", "tenure"][i] || "vibe",
+              text: t,
+            }));
+          }
+          if (parsed[0].text) return parsed;
+        }
       } catch { /* ignore */ }
       return null;
     }
@@ -176,7 +236,7 @@ Return ONLY a JSON array of 5 strings, no other text. Example format:
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-3-5-sonnet-20241022",
+            model: "claude-sonnet-4-20250514",
             max_tokens: 1024,
             messages: [{ role: "user", content: cluePrompt }],
           }),
@@ -186,7 +246,7 @@ Return ONLY a JSON array of 5 strings, no other text. Example format:
           const aiData = await aiResponse.json();
           const rawText = aiData.content?.[0]?.text || "[]";
           const parsed = parseCluesFromText(rawText);
-          if (parsed) { clues = parsed; aiUsed = true; }
+          if (parsed) { clues = parsed.map(c => JSON.stringify(c)); aiUsed = true; }
         } else {
           console.error("Anthropic API error:", aiResponse.status);
         }
@@ -219,7 +279,7 @@ Return ONLY a JSON array of 5 strings, no other text. Example format:
             .map((p: any) => p.text)
             .join("");
           const parsed = parseCluesFromText(rawText);
-          if (parsed) { clues = parsed; aiUsed = true; }
+          if (parsed) { clues = parsed.map(c => JSON.stringify(c)); aiUsed = true; }
         } else {
           console.error("Gemini API error:", geminiResponse.status);
         }
@@ -229,33 +289,16 @@ Return ONLY a JSON array of 5 strings, no other text. Example format:
     }
 
     if (!aiUsed) {
-      const isFemale = chosen.gender === "Female";
-      const isMale = chosen.gender === "Male";
-      const pronoun = isFemale ? "She" : isMale ? "He" : "This person";
-      const verb = (isFemale || isMale) ? "has" : "has";
-      const verbBe = (isFemale || isMale) ? "is" : "is";
+      const pronoun = chosen.gender === "Female" ? "She" : chosen.gender === "Male" ? "He" : "This person";
       clues = [
-        "This person is a proud member of the Sycamore family.",
-        departmentName
-          ? `${pronoun} ${verbBe} part of the ${departmentName} team.`
-          : "This person brings energy and dedication to work every day.",
-        chosen.role
-          ? `Their role: ${chosen.role}.`
-          : teamName
-          ? `${pronoun} works with the ${teamName} team.`
-          : "This person is well-known across the organisation.",
-        tenureHint
-          ? `${pronoun} ${verb} been with Sycamore for ${tenureHint}.`
-          : chosen.level
-          ? `${pronoun} ${verbBe} at the ${chosen.level} level.`
-          : `${pronoun} ${verbBe} someone many colleagues interact with regularly.`,
-        chosen.level && tenureHint
-          ? `At the ${chosen.level} level, with ${tenureHint} at Sycamore${departmentName ? ` in ${departmentName}` : ""}.`
-          : `${pronoun} works${departmentName ? ` in ${departmentName}` : ""}${chosen.role ? ` as ${chosen.role}` : ""}.`,
+        JSON.stringify({ category: "vibe", text: `${pronoun} is a proud member of the Sycamore family${cityName ? ` based in ${cityName}` : ""}.` }),
+        JSON.stringify({ category: "location", text: locationName ? `You'll find them at the ${locationName}.` : "This person brings energy and dedication to work every day." }),
+        JSON.stringify({ category: "team", text: departmentName ? `${pronoun} is part of the ${departmentName} department${deptSize > 1 ? ` (one of ${deptSize})` : ""}.` : teamName ? `${pronoun} works with the ${teamName} team.` : "This person is well-known across the organisation." }),
+        JSON.stringify({ category: "connections", text: managerName ? `${pronoun} reports to ${managerName}${directReportsCount > 0 ? ` and manages ${directReportsCount} people` : ""}.` : directReportsCount > 0 ? `${pronoun} manages ${directReportsCount} direct report${directReportsCount > 1 ? "s" : ""}.` : `${pronoun} is an individual contributor.` }),
+        JSON.stringify({ category: "role", text: `${pronoun}${chosen.role ? ` works as ${chosen.role}` : ""}${tenureHint ? `, having been here for ${tenureHint}` : ""}${departmentName ? ` in ${departmentName}` : ""}.` }),
       ];
     }
 
-    // Insert the puzzle
     const { error: insertError } = await supabase
       .from("guess_who_puzzles")
       .insert({
@@ -277,6 +320,7 @@ Return ONLY a JSON array of 5 strings, no other text. Example format:
         message: "Puzzle generated successfully",
         date: today,
         has_avatar: hasAvatar,
+        ai_used: aiUsed,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

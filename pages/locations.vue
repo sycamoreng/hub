@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { fetchLocations } = useCompanyData()
+const router = useRouter()
 const locations = ref<any[]>([])
 const selectedCountry = ref('All')
 const loading = ref(true)
@@ -12,6 +13,10 @@ const countries = computed(() => ['All', ...new Set(locations.value.map(l => l.c
 const filtered = computed(() =>
   selectedCountry.value === 'All' ? locations.value : locations.value.filter(l => l.country === selectedCountry.value)
 )
+
+function viewStaffAt(location: any) {
+  router.push({ path: '/staff', query: { location: location.name } })
+}
 </script>
 
 <template>
@@ -35,7 +40,7 @@ const filtered = computed(() =>
 
     <div v-if="loading" class="text-slate-400">Loading locations...</div>
     <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-      <article v-for="l in filtered" :key="l.id" class="card card-hover p-6">
+      <article v-for="l in filtered" :key="l.id" class="card card-hover p-6 cursor-pointer" @click="viewStaffAt(l)">
         <div class="flex items-center gap-2 mb-3 flex-wrap">
           <span v-if="l.is_headquarters" class="badge badge-green">Headquarters</span>
           <span class="badge badge-slate capitalize">{{ l.location_type }}</span>
@@ -48,13 +53,14 @@ const filtered = computed(() =>
           <div class="text-slate-500">{{ l.country }}</div>
         </div>
         <div class="mt-4 pt-4 border-t border-slate-100 space-y-1.5 text-sm">
-          <a v-if="l.phone" :href="`tel:${l.phone}`" class="flex items-center gap-2 text-slate-700 hover:text-sycamore-700">
+          <a v-if="l.phone" :href="`tel:${l.phone}`" class="flex items-center gap-2 text-slate-700 hover:text-sycamore-700" @click.stop>
             <SidebarIcon name="phone" /> {{ l.phone }}
           </a>
-          <a v-if="l.email" :href="`mailto:${l.email}`" class="flex items-center gap-2 text-slate-700 hover:text-sycamore-700">
+          <a v-if="l.email" :href="`mailto:${l.email}`" class="flex items-center gap-2 text-slate-700 hover:text-sycamore-700" @click.stop>
             <SidebarIcon name="mail" /> {{ l.email }}
           </a>
         </div>
+        <div class="mt-3 text-xs font-medium text-sycamore-700">View staff at this location &rarr;</div>
       </article>
     </div>
   </div>

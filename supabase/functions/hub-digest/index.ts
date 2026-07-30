@@ -247,7 +247,7 @@ async function compileDigest(
         .map((s: any) => `<tr><td style="padding:5px 0;"><span style="font-weight:600;color:#0b1a2c;">${s.full_name}</span> <span style="color:#3087b9;font-weight:700;font-size:11px;">${s.years} yr${s.years > 1 ? "s" : ""}</span> <span style="color:#94a3b8;font-size:11px;">&middot; ${s.role || ""}</span></td></tr>`)
         .join("");
       const totalYears = sorted.reduce((sum: number, s: any) => sum + s.years, 0);
-      const narrative = `${periodAnnis.length} team member${periodAnnis.length > 1 ? "s" : ""} hit a Sycamore milestone &mdash; that's ${totalYears} combined years of building together.`;
+      const narrative = `${periodAnnis.length} Sytizen${periodAnnis.length > 1 ? "s" : ""} hit a Sycamore milestone &mdash; that's ${totalYears} combined years of building together.`;
       htmlSections.push(
         card("&#127942;", "Milestones reached", narrative, `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${names}</table>`)
       );
@@ -324,7 +324,7 @@ async function compileDigest(
       const rows = sorted
         .map(([uid, pts], i) => {
           const medal = i < 3 ? medals[i] : `<span style="color:#94a3b8;font-size:11px;">${i + 1}.</span>`;
-          const name = nameMap.get(uid) || "Team Member";
+          const name = nameMap.get(uid) || "a Sytizen";
           const barWidth = Math.max(20, Math.round((pts / sorted[0][1]) * 100));
           return `<tr><td style="padding:6px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="width:24px;vertical-align:middle;font-size:16px;">${medal}</td><td style="vertical-align:middle;"><div style="font-weight:600;color:#0b1a2c;font-size:12px;">${name}</div><div style="margin-top:3px;background:#eaf4fb;border-radius:99px;height:6px;width:100%;"><div style="background:linear-gradient(90deg,#3087b9,#74b9e3);height:6px;border-radius:99px;width:${barWidth}%;"></div></div></td><td style="width:50px;text-align:right;vertical-align:middle;font-weight:700;color:#3087b9;font-size:12px;">${pts} pts</td></tr></table></td></tr>`;
         })
@@ -354,7 +354,7 @@ async function compileDigest(
       const names = joiners
         .map(
           (j: any) =>
-            `<tr><td style="padding:5px 0;"><span style="font-weight:600;color:#0b1a2c;">${j.full_name}</span> <span style="color:#64748b;font-size:11px;">${j.role || "New Team Member"}</span></td></tr>`
+            `<tr><td style="padding:5px 0;"><span style="font-weight:600;color:#0b1a2c;">${j.full_name}</span> <span style="color:#64748b;font-size:11px;">${j.role || "New Sytizen"}</span></td></tr>`
         )
         .join("");
       const narrative = joiners.length === 1
@@ -395,7 +395,7 @@ async function compileDigest(
       const items = kudos
         .map((k: any) => {
           const from = nameMap.get(k.from_user_id) || "Someone";
-          const to = nameMap.get(k.to_user_id) || "a colleague";
+          const to = nameMap.get(k.to_user_id) || "a fellow Sytizen";
           const msg = k.message ? `<div style="color:#64748b;font-size:11px;font-style:italic;margin-top:2px;">"${(k.message as string).slice(0, 80)}${k.message.length > 80 ? "..." : ""}"</div>` : "";
           return `<tr><td style="padding:8px 0;border-bottom:1px solid #f1f5f9;"><div style="font-size:12px;color:#334155;"><span style="font-weight:600;">${from}</span> &#8594; <span style="font-weight:600;">${to}</span></div>${msg}</td></tr>`;
         })
@@ -438,7 +438,7 @@ async function compileDigest(
         .slice(0, getMax("badges"))
         .map((ub: any) => {
           const badge = badgeMap.get(ub.badge_id);
-          const name = nameMap.get(ub.user_id) || "Team Member";
+          const name = nameMap.get(ub.user_id) || "a Sytizen";
           return `<tr><td style="padding:5px 0;"><span style="font-size:16px;">${badge?.emoji || "&#127941;"}</span> <span style="font-weight:600;color:#0b1a2c;font-size:12px;">${name}</span> <span style="color:#64748b;font-size:11px;">unlocked</span> <span style="font-weight:600;color:#3087b9;font-size:12px;">${badge?.name || "a badge"}</span></td></tr>`;
         })
         .join("");

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useSupabase } from '~/utils/supabase'
-import { findTemplate } from '~/composables/useFeed'
+import { findTemplate, isBotPost } from '~/composables/useFeed'
 
 const { fetchCompanyInfo, fetchDepartments, fetchLocations, fetchStaff, fetchAnnouncements, fetchHolidaysEvents } = useCompanyData()
 const { fetchPosts, fetchMentionsForPosts, fetchMentionsForAnnouncements } = useFeed()
@@ -69,7 +69,7 @@ onMounted(async () => {
     postMentions.value = pm
     announcementMentions.value = am
 
-    const uids = p.map(x => x.author_id)
+    const uids = p.map(x => x.author_id).filter(Boolean) as string[]
     if (uids.length) {
       const [{ data: staffRows }, profiles] = await Promise.all([
         supabase.from('staff_members').select('id, full_name, auth_user_id').in('auth_user_id', uids),
@@ -421,7 +421,7 @@ const featureSpotlights = [
           />
           <div class="p-4 flex gap-3 flex-1">
             <NuxtLink
-              v-if="postAuthors[p.author_id]?.staff_id"
+              v-if="!isBotPost(p) && postAuthors[p.author_id]?.staff_id"
               :to="`/profile/${postAuthors[p.author_id]?.staff_id}`"
               class="flex-shrink-0"
             >
@@ -437,18 +437,24 @@ const featureSpotlights = [
               </div>
             </NuxtLink>
             <div v-else class="flex-shrink-0">
-              <div class="w-10 h-10 rounded-full bg-sycamore-100 text-sycamore-700 flex items-center justify-center text-sm font-semibold">
+              <img
+                v-if="isBotPost(p)"
+                src="/logo-icon.png"
+                alt="Sycamore Bot"
+                class="w-10 h-10 rounded-full object-cover border border-slate-200"
+              />
+              <div v-else class="w-10 h-10 rounded-full bg-sycamore-100 text-sycamore-700 flex items-center justify-center text-sm font-semibold">
                 {{ postInitials(postAuthors[p.author_id]?.name || '?') }}
               </div>
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 text-sm">
                 <NuxtLink
-                  v-if="postAuthors[p.author_id]?.staff_id"
+                  v-if="!isBotPost(p) && postAuthors[p.author_id]?.staff_id"
                   :to="`/profile/${postAuthors[p.author_id]?.staff_id}`"
                   class="font-semibold text-slate-900 hover:text-sycamore-700 truncate"
                 >{{ postAuthors[p.author_id]?.name }}</NuxtLink>
-                <span v-else class="font-semibold text-slate-900 truncate">{{ postAuthors[p.author_id]?.name || 'Sycamore staff' }}</span>
+                <span v-else class="font-semibold text-slate-900 truncate">{{ isBotPost(p) ? 'Sycamore Bot' : (postAuthors[p.author_id]?.name || 'Sycamore staff') }}</span>
                 <span class="text-xs text-slate-400">{{ relativeTime(p.created_at) }}</span>
               </div>
               <PostBody class="block text-sm text-slate-700 mt-1" :content="snippet(p.content)" :mentions="postMentions[p.id]" />

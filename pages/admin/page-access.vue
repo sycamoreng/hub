@@ -50,7 +50,8 @@ const pages: PageEntry[] = [
   { path: '/contractors', label: 'Contractors', group: 'People & Culture' },
   { path: '/burnout', label: 'Burnout Dashboard', group: 'People & Culture' },
   { path: '/photos', label: 'Photo Wall', group: 'Social & Fun' },
-  { path: '/playlist', label: 'Playlist of the Week', group: 'Social & Fun' }
+  { path: '/playlist', label: 'Playlist of the Week', group: 'Social & Fun' },
+  { path: '/forums', label: 'Forums', group: 'Social & Fun' }
 ]
 
 const grouped = computed(() => {

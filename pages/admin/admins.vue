@@ -56,6 +56,10 @@ const SECTIONS = [
   { key: 'attendance', label: 'Attendance & Leave' },
   { key: 'gamification', label: 'Gamification' },
   { key: 'raffle', label: 'Raffle' },
+  { key: 'forums', label: 'Forums' },
+  { key: 'playlists', label: 'Playlists' },
+  { key: 'requests', label: 'Service Requests' },
+  { key: 'hmo', label: 'HMO' },
   { key: 'audit-log', label: 'Audit Log' }
 ]
 const ACTIONS: CrudAction[] = ['create', 'read', 'update', 'delete']

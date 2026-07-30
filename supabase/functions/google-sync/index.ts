@@ -156,10 +156,46 @@ async function downloadAvatar(url: string, accessToken: string): Promise<{ bytes
     if (!res.ok) return null
     const contentType = res.headers.get('content-type') ?? 'image/jpeg'
     const buf = new Uint8Array(await res.arrayBuffer())
+    if (buf.byteLength === 0) return null
     return { bytes: buf, contentType }
   } catch {
     return null
   }
+}
+
+function b64urlToBytes(b64: string): Uint8Array {
+  const s = b64.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = s + '='.repeat((4 - (s.length % 4)) % 4)
+  const bin = atob(padded)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes
+}
+
+async function fetchDirectoryPhoto(accessToken: string, userKey: string): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+  try {
+    const res = await fetch(`${ADMIN_DIRECTORY}/users/${encodeURIComponent(userKey)}/photos/thumbnail`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+    if (!res.ok) return null
+    const body = await res.json()
+    const data: string | undefined = body?.photoData
+    if (!data) return null
+    const contentType: string = body?.mimeType ?? 'image/jpeg'
+    const bytes = b64urlToBytes(data)
+    if (bytes.byteLength === 0) return null
+    return { bytes, contentType }
+  } catch {
+    return null
+  }
+}
+
+async function fetchAnyGooglePhoto(accessToken: string, u: GoogleUser): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+  if (u.thumbnailPhotoUrl) {
+    const dl = await downloadAvatar(u.thumbnailPhotoUrl, accessToken)
+    if (dl) return dl
+  }
+  return await fetchDirectoryPhoto(accessToken, u.id)
 }
 
 async function uploadAvatar(supabase: any, googleId: string, bytes: Uint8Array, contentType: string): Promise<string | null> {
@@ -343,8 +379,69 @@ async function runSync(ctx: SyncContext) {
   return { counters, diff, errors, seenStaffIds }
 }
 
+async function runPhotoOnlySync(ctx: SyncContext) {
+  const users = await fetchAllUsers(ctx.accessToken, ctx.domain)
+  const staffByAuthId = new Map<string, any>()
+  for (const [, s] of ctx.existingByEmail) {
+    if (s.auth_user_id) staffByAuthId.set(s.auth_user_id, s)
+  }
+  const authIds = Array.from(staffByAuthId.keys())
+  const existingAvatars = new Map<string, string | null>()
+  if (authIds.length) {
+    const { data: profiles } = await ctx.supabase
+      .from('user_profiles')
+      .select('user_id, avatar_url')
+      .in('user_id', authIds)
+    for (const p of profiles ?? []) existingAvatars.set(p.user_id as string, (p.avatar_url as string) || null)
+  }
+  const { data: allLocks } = await ctx.supabase
+    .from('user_profile_locks')
+    .select('user_id, field')
+    .eq('field', 'avatar_url')
+  const lockedAuthIds = new Set<string>((allLocks ?? []).map((r: any) => r.user_id as string))
+
+  const counters = { updated: 0, skipped: 0, missing_photo: 0, no_staff: 0, no_auth_user: 0, locked: 0, already_has: 0 }
+  const errors: { email?: string; message: string }[] = []
+  const changed: { email: string; avatar_url: string }[] = []
+
+  for (const u of users) {
+    try {
+      const email = (u.primaryEmail ?? '').toLowerCase()
+      if (!email) continue
+      if (decide(email, ctx.rules, ctx.settings?.default_action || 'include') === 'exclude') {
+        counters.skipped += 1
+        continue
+      }
+      const staff = ctx.existingByGoogleId.get(u.id) ?? ctx.existingByEmail.get(email)
+      if (!staff) { counters.no_staff += 1; continue }
+      if (!staff.auth_user_id) { counters.no_auth_user += 1; continue }
+      if (lockedAuthIds.has(staff.auth_user_id)) { counters.locked += 1; continue }
+      const current = existingAvatars.get(staff.auth_user_id) ?? null
+      if (current && current.trim().length > 0) { counters.already_has += 1; continue }
+      if (ctx.mode !== 'apply') {
+        if (u.thumbnailPhotoUrl) { counters.updated += 1 } else { counters.missing_photo += 1 }
+        continue
+      }
+
+      const dl = await fetchAnyGooglePhoto(ctx.accessToken, u)
+      if (!dl) { counters.missing_photo += 1; continue }
+      const url = await uploadAvatar(ctx.supabase, u.id, dl.bytes, dl.contentType)
+      if (!url) { counters.missing_photo += 1; continue }
+      const { error } = await ctx.supabase
+        .from('user_profiles')
+        .upsert({ user_id: staff.auth_user_id, avatar_url: url, avatar_source: 'google' }, { onConflict: 'user_id' })
+      if (error) throw error
+      counters.updated += 1
+      changed.push({ email, avatar_url: url })
+    } catch (e: any) {
+      errors.push({ email: u.primaryEmail, message: e?.message ?? String(e) })
+    }
+  }
+
+  return { counters, errors, changed }
+}
+
 async function maybeUploadAvatarForStaff(ctx: SyncContext, staffId: string, u: GoogleUser) {
-  if (!u.thumbnailPhotoUrl) return
   const { data: staff } = await ctx.supabase.from('staff_members').select('auth_user_id').eq('id', staffId).maybeSingle()
   const authUserId = staff?.auth_user_id
   if (!authUserId) return
@@ -355,7 +452,7 @@ async function maybeUploadAvatarForStaff(ctx: SyncContext, staffId: string, u: G
     .eq('field', 'avatar_url')
     .maybeSingle()
   if (lock) return
-  const dl = await downloadAvatar(u.thumbnailPhotoUrl, ctx.accessToken)
+  const dl = await fetchAnyGooglePhoto(ctx.accessToken, u)
   if (!dl) return
   const url = await uploadAvatar(ctx.supabase, u.id, dl.bytes, dl.contentType)
   if (!url) return
@@ -475,6 +572,66 @@ Deno.serve(async (req: Request) => {
             last_sync_error: e?.message ?? String(e)
           }).eq('id', 'default')
         }
+        return jsonResponse({ error: e?.message ?? String(e) }, 500)
+      }
+    }
+
+    if (action === 'photo_status') {
+      try {
+        const [{ data: staffList }, { data: profs }, { data: locks }] = await Promise.all([
+          service.from('staff_members').select('id, full_name, email, google_user_id, auth_user_id, is_active, department_id').eq('is_active', true).order('full_name', { ascending: true }),
+          service.from('user_profiles').select('user_id, avatar_url, avatar_source'),
+          service.from('user_profile_locks').select('user_id, field').eq('field', 'avatar_url'),
+        ])
+        const profileByUser = new Map<string, { url: string | null; source: string | null }>()
+        for (const p of profs ?? []) profileByUser.set(p.user_id as string, { url: (p.avatar_url as string) || null, source: (p.avatar_source as string) || null })
+        const lockedUsers = new Set<string>((locks ?? []).map((r: any) => r.user_id as string))
+
+        const token = await getGoogleAccessToken()
+        const domain = Deno.env.get('GOOGLE_WORKSPACE_DOMAIN') ?? ''
+        const users = await fetchAllUsers(token, domain)
+        const usersById = new Map<string, GoogleUser>()
+        const usersByEmail = new Map<string, GoogleUser>()
+        for (const u of users) {
+          usersById.set(u.id, u)
+          if (u.primaryEmail) usersByEmail.set(u.primaryEmail.toLowerCase(), u)
+        }
+
+        const rows = (staffList ?? []).map((s: any) => {
+          const gu = (s.google_user_id ? usersById.get(s.google_user_id) : null) ?? (s.email ? usersByEmail.get((s.email as string).toLowerCase()) : null)
+          const prof = s.auth_user_id ? profileByUser.get(s.auth_user_id) : null
+          const hasHubPhoto = !!(prof?.url && prof.url.trim().length > 0)
+          const hasGooglePhoto = !!(gu && gu.thumbnailPhotoUrl)
+          const locked = s.auth_user_id ? lockedUsers.has(s.auth_user_id) : false
+          return {
+            staff_id: s.id,
+            full_name: s.full_name,
+            email: s.email,
+            department_id: s.department_id,
+            has_hub_photo: hasHubPhoto,
+            hub_photo_url: prof?.url ?? null,
+            photo_source: prof?.source ?? null,
+            has_google_photo: hasGooglePhoto,
+            google_photo_url: gu?.thumbnailPhotoUrl ?? null,
+            avatar_locked: locked,
+            has_google_account: !!gu,
+            has_auth_user: !!s.auth_user_id,
+          }
+        })
+        return jsonResponse({ rows })
+      } catch (e: any) {
+        return jsonResponse({ error: e?.message ?? String(e) }, 500)
+      }
+    }
+
+    if (action === 'sync_photos' || action === 'sync_photos_dry') {
+      const mode: 'dry_run' | 'apply' = action === 'sync_photos' ? 'apply' : 'dry_run'
+      if (mode === 'apply' && !isSuper) return jsonResponse({ error: 'only super admins can apply' }, 403)
+      try {
+        const ctx = await loadContext(service, mode, email)
+        const { counters, errors, changed } = await runPhotoOnlySync(ctx)
+        return jsonResponse({ counters, errors, changed })
+      } catch (e: any) {
         return jsonResponse({ error: e?.message ?? String(e) }, 500)
       }
     }

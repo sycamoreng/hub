@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { useSupabase } from '~/utils/supabase'
+import { useWordleMatch } from '~/composables/useWordleMatch'
 
 const supabase = useSupabase()
 const toast = useToast()
+const route = useRoute()
+const router = useRouter()
+const { createMatch, joinByCode, lookupByCode } = useWordleMatch()
 
 interface GameState {
   puzzle_date: string
@@ -24,6 +28,65 @@ const shakeRow = ref<number | null>(null)
 const revealRow = ref<number | null>(null)
 const flashBanner = ref<string>('')
 
+const activeMatchId = ref<string>('')
+const joinCode = ref('')
+const creatingMatch = ref(false)
+const joiningMatch = ref(false)
+const selectedTimeLimit = ref<number | null>(90)
+
+async function hostMatch() {
+  creatingMatch.value = true
+  try {
+    const m = await createMatch({ maxPlayers: 30, timeLimit: selectedTimeLimit.value })
+    activeMatchId.value = m.id
+    await router.replace({ query: { ...route.query, match: m.code } })
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not create room')
+  } finally {
+    creatingMatch.value = false
+  }
+}
+
+async function joinRoomByCode() {
+  const code = joinCode.value.trim().toUpperCase()
+  if (!code) return
+  joiningMatch.value = true
+  try {
+    const m = await joinByCode(code)
+    activeMatchId.value = m.id
+    joinCode.value = ''
+    await router.replace({ query: { ...route.query, match: m.code } })
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not join')
+  } finally {
+    joiningMatch.value = false
+  }
+}
+
+async function leaveMatch() {
+  activeMatchId.value = ''
+  const q = { ...route.query }
+  delete q.match
+  await router.replace({ query: q })
+}
+
+async function tryEnterFromQuery() {
+  const code = (route.query.match as string | undefined)?.toUpperCase()
+  if (!code) return
+  try {
+    const m = await lookupByCode(code)
+    if (!m) return
+    if (m.status === 'pending') {
+      const joined = await joinByCode(code)
+      activeMatchId.value = joined.id
+    } else {
+      activeMatchId.value = m.id
+    }
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not open room')
+  }
+}
+
 async function startOrGet() {
   loading.value = true
   try {
@@ -36,7 +99,10 @@ async function startOrGet() {
     loading.value = false
   }
 }
-onMounted(startOrGet)
+onMounted(async () => {
+  await startOrGet()
+  await tryEnterFromQuery()
+})
 
 const rows = computed(() => {
   if (!state.value) return [] as Array<{ letters: string[]; results: string[]; active: boolean }>
@@ -161,6 +227,9 @@ function triggerReveal(idx: number) {
 }
 
 function handleKey(e: KeyboardEvent) {
+  if (activeMatchId.value) return
+  const tag = (e.target as HTMLElement)?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
   if (!state.value || state.value.completed || submitting.value) return
   if (e.key === 'Enter') { e.preventDefault(); submit() }
   else if (e.key === 'Backspace') { e.preventDefault(); backspace() }
@@ -180,15 +249,54 @@ function shareSummary() {
 </script>
 
 <template>
-  <div class="max-w-xl mx-auto pb-8">
+  <div :class="[activeMatchId ? 'max-w-4xl' : 'max-w-xl', 'mx-auto pb-8']">
     <header class="text-center mb-6">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-        Daily Word
+        {{ activeMatchId ? 'Room Match' : 'Daily Word' }}
       </div>
       <h1 class="mt-3 text-2xl sm:text-4xl font-bold text-slate-900 tracking-tight">Sycamore Wordle</h1>
-      <p class="mt-1 text-xs sm:text-sm text-slate-500">One puzzle a day. Fewer guesses, more points.</p>
+      <p class="mt-1 text-xs sm:text-sm text-slate-500">
+        <span v-if="activeMatchId">Race up to five teammates on a fresh word.</span>
+        <span v-else>One puzzle a day. Fewer guesses, more points.</span>
+      </p>
     </header>
+
+    <WordleMatchRoom v-if="activeMatchId" :match-id="activeMatchId" @leave="leaveMatch" />
+
+    <template v-else>
+    <section class="mb-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-bold text-slate-900">Race a teammate</h2>
+          <p class="text-xs text-slate-500">Host a room with a fresh word (up to 30 players), or join with a code.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <input v-model="joinCode" placeholder="Code" maxlength="8" class="w-28 px-3 py-2 rounded-lg border border-slate-300 uppercase tracking-widest font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <button type="button" class="text-sm px-4 py-2 rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40" :disabled="joiningMatch || !joinCode.trim()" @click="joinRoomByCode">
+            {{ joiningMatch ? 'Joining...' : 'Join room' }}
+          </button>
+          <button type="button" class="text-sm px-4 py-2 rounded-full bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-40" :disabled="creatingMatch" @click="hostMatch">
+            {{ creatingMatch ? 'Creating...' : 'Host new room' }}
+          </button>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+        <span class="text-xs font-semibold text-slate-500">Timer:</span>
+        <button
+          v-for="opt in [{ label: 'None', value: null }, { label: '30s', value: 30 }, { label: '60s', value: 60 }, { label: '90s', value: 90 }, { label: '3m', value: 180 }]"
+          :key="String(opt.value)"
+          type="button"
+          class="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all"
+          :class="selectedTimeLimit === opt.value ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'"
+          @click="selectedTimeLimit = opt.value"
+        >{{ opt.label }}</button>
+        <span class="text-[11px] text-slate-400 ml-1">
+          <span v-if="selectedTimeLimit">Solve fast for bonus points!</span>
+          <span v-else>No time pressure.</span>
+        </span>
+      </div>
+    </section>
 
     <div v-if="loading" class="text-center text-sm text-slate-400 py-10">Loading your puzzle...</div>
 
@@ -247,6 +355,7 @@ function shareSummary() {
         Green = right letter, right spot. Amber = right letter, wrong spot.
       </p>
     </div>
+    </template>
   </div>
 </template>
 

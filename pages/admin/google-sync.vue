@@ -13,7 +13,7 @@ const toast = useToast()
 const { isSuperAdmin } = useAuth()
 const { log: auditLog } = useAuditLog()
 
-const activeTab = ref<'overview'|'users'|'departments'|'settings'>('overview')
+const activeTab = ref<'overview'|'users'|'photos'|'departments'|'settings'>('overview')
 
 const settings = ref<SettingsRow | null>(null)
 const runs = ref<RunRow[]>([])
@@ -300,6 +300,78 @@ async function runApply() {
   }
 }
 
+async function runPhotoSync() {
+  if (!isSuperAdmin.value) { toast.error('Only super admins can sync photos'); return }
+  const ok = await toast.confirm({
+    title: 'Sync missing staff photos?',
+    message: 'This will pull avatars from Google Workspace for staff members who currently have no photo in the Hub. Locked profiles are skipped.',
+    variant: 'primary',
+    confirmLabel: 'Sync photos'
+  })
+  if (!ok) return
+  running.value = true
+  try {
+    const res = await callFn('sync_photos', 'POST')
+    auditLog({ action: 'sync_photos_apply', target_type: 'google_sync', details: res.counters })
+    toast.success(`Photos synced: ${res.counters.updated} added, ${res.counters.already_has} already had one, ${res.counters.missing_photo} missing in Google`)
+    await Promise.all([loadStatus(), loadExistingStaffEmails(), loadPhotoStatus()])
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    running.value = false
+  }
+}
+
+const photoStatusLoading = ref(false)
+const photoRows = ref<Array<{ staff_id: string; full_name: string; email: string; department_id: string | null; has_hub_photo: boolean; hub_photo_url: string | null; photo_source: string | null; has_google_photo: boolean; google_photo_url: string | null; avatar_locked: boolean; has_google_account: boolean; has_auth_user: boolean }>>([])
+const photoFilter = ref<'missing_but_google' | 'no_hub_photo' | 'has_hub_photo' | 'no_google_photo' | 'locked' | 'all'>('missing_but_google')
+const photoSearch = ref('')
+
+const photoRowsFiltered = computed(() => {
+  const q = photoSearch.value.trim().toLowerCase()
+  return photoRows.value.filter(r => {
+    if (q && !(r.full_name || '').toLowerCase().includes(q) && !(r.email || '').toLowerCase().includes(q)) return false
+    switch (photoFilter.value) {
+      case 'missing_but_google': return !r.has_hub_photo && r.has_google_photo && !r.avatar_locked
+      case 'no_hub_photo': return !r.has_hub_photo
+      case 'has_hub_photo': return r.has_hub_photo
+      case 'no_google_photo': return !r.has_google_photo && r.has_google_account
+      case 'locked': return r.avatar_locked
+      case 'all':
+      default: return true
+    }
+  })
+})
+
+const photoSummary = computed(() => {
+  const rows = photoRows.value
+  return {
+    total: rows.length,
+    hub: rows.filter(r => r.has_hub_photo).length,
+    no_hub: rows.filter(r => !r.has_hub_photo).length,
+    google_only: rows.filter(r => !r.has_hub_photo && r.has_google_photo).length,
+    no_google: rows.filter(r => !r.has_google_photo && r.has_google_account).length,
+    locked: rows.filter(r => r.avatar_locked).length,
+    no_google_account: rows.filter(r => !r.has_google_account).length,
+  }
+})
+
+async function loadPhotoStatus() {
+  photoStatusLoading.value = true
+  try {
+    const res = await callFn('photo_status', 'POST')
+    photoRows.value = res.rows ?? []
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    photoStatusLoading.value = false
+  }
+}
+
+watch(activeTab, (t) => {
+  if (t === 'photos' && photoRows.value.length === 0 && !photoStatusLoading.value) loadPhotoStatus()
+})
+
 function fmtTime(iso: string | null) {
   if (!iso) return '-'
   return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -327,6 +399,9 @@ onMounted(async () => {
         <button class="btn-secondary" :disabled="running" @click="runDryRun">
           {{ running ? 'Running...' : 'Dry run' }}
         </button>
+        <button v-if="isSuperAdmin" class="btn-secondary" :disabled="running" @click="runPhotoSync" title="Only fills in avatars for staff who currently have none">
+          {{ running ? 'Working...' : 'Sync missing photos' }}
+        </button>
         <button v-if="isSuperAdmin" class="btn-primary" :disabled="running" @click="runApply">
           {{ running ? 'Syncing...' : 'Sync now' }}
         </button>
@@ -335,13 +410,13 @@ onMounted(async () => {
 
     <div class="flex gap-1 border-b border-slate-200 text-sm font-medium overflow-x-auto">
       <button
-        v-for="t in (['overview','users','departments','settings'] as const)"
+        v-for="t in (['overview','users','photos','departments','settings'] as const)"
         :key="t"
         class="px-3 py-2 -mb-px border-b-2 transition-colors capitalize"
         :class="activeTab === t ? 'border-sycamore-600 text-sycamore-700' : 'border-transparent text-slate-500 hover:text-slate-900'"
         @click="activeTab = t"
       >
-        {{ t === 'overview' ? 'Overview' : t === 'users' ? 'Users' : t === 'departments' ? 'Department mapping' : 'Settings' }}
+        {{ t === 'overview' ? 'Overview' : t === 'users' ? 'Users' : t === 'photos' ? 'Photos' : t === 'departments' ? 'Department mapping' : 'Settings' }}
       </button>
     </div>
 
@@ -571,6 +646,115 @@ onMounted(async () => {
             <button class="px-2 py-1 rounded border border-slate-200 text-xs disabled:opacity-40" :disabled="userPage >= userTotalPages" @click="userPage = userTotalPages">Last</button>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section v-if="activeTab === 'photos'" class="space-y-4">
+      <div class="card p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-900">Staff photo coverage</h2>
+            <p class="text-xs text-slate-500">Snapshot of which staff have a Hub photo, whether Google has one, and where any gaps are.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn-secondary" :disabled="photoStatusLoading" @click="loadPhotoStatus">
+              {{ photoStatusLoading ? 'Refreshing...' : 'Refresh' }}
+            </button>
+            <button v-if="isSuperAdmin" class="btn-primary" :disabled="running" @click="runPhotoSync">
+              {{ running ? 'Working...' : 'Pull missing photos from Google' }}
+            </button>
+          </div>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+          <div class="rounded-lg border border-slate-200 p-3">
+            <div class="text-slate-500">Total active staff</div>
+            <div class="text-lg font-semibold text-slate-900">{{ photoSummary.total }}</div>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-3">
+            <div class="text-slate-500">Has Hub photo</div>
+            <div class="text-lg font-semibold text-emerald-600">{{ photoSummary.hub }}</div>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-3">
+            <div class="text-slate-500">No Hub photo</div>
+            <div class="text-lg font-semibold text-amber-600">{{ photoSummary.no_hub }}</div>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-3">
+            <div class="text-slate-500">Missing but Google has one</div>
+            <div class="text-lg font-semibold text-sycamore-700">{{ photoSummary.google_only }}</div>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-3">
+            <div class="text-slate-500">No Google photo either</div>
+            <div class="text-lg font-semibold text-slate-700">{{ photoSummary.no_google }}</div>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-3">
+            <div class="text-slate-500">Profile locked</div>
+            <div class="text-lg font-semibold text-slate-700">{{ photoSummary.locked }}</div>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-3">
+            <div class="text-slate-500">No matching Google account</div>
+            <div class="text-lg font-semibold text-slate-700">{{ photoSummary.no_google_account }}</div>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <select v-model="photoFilter" class="input text-sm">
+            <option value="missing_but_google">Missing in Hub, available in Google</option>
+            <option value="no_hub_photo">No Hub photo</option>
+            <option value="has_hub_photo">Has Hub photo</option>
+            <option value="no_google_photo">No Google photo</option>
+            <option value="locked">Locked photos</option>
+            <option value="all">All active staff</option>
+          </select>
+          <input v-model="photoSearch" placeholder="Search by name or email" class="input text-sm flex-1 min-w-[200px]" />
+          <div class="text-xs text-slate-500 ml-auto">{{ photoRowsFiltered.length }} shown</div>
+        </div>
+      </div>
+
+      <div class="card p-0 overflow-hidden">
+        <div v-if="photoStatusLoading" class="p-6 text-center text-sm text-slate-500">Loading photo status...</div>
+        <div v-else-if="photoRowsFiltered.length === 0" class="p-6 text-center text-sm text-slate-500">No staff match this filter.</div>
+        <table v-else class="w-full text-sm">
+          <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+            <tr>
+              <th class="text-left py-2 px-3">Staff</th>
+              <th class="text-left py-2 px-3">Hub photo</th>
+              <th class="text-left py-2 px-3">Google photo</th>
+              <th class="text-left py-2 px-3">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in photoRowsFiltered" :key="row.staff_id" class="border-t border-slate-100">
+              <td class="py-2 px-3">
+                <div class="flex items-center gap-2">
+                  <img v-if="row.hub_photo_url" :src="row.hub_photo_url" alt="" class="w-8 h-8 rounded-full object-cover" />
+                  <div v-else class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 text-xs flex items-center justify-center">
+                    {{ (row.full_name || row.email || '?').slice(0,1).toUpperCase() }}
+                  </div>
+                  <div>
+                    <div class="font-medium text-slate-900">{{ row.full_name || '(no name)' }}</div>
+                    <div class="text-xs text-slate-500">{{ row.email }}</div>
+                  </div>
+                </div>
+              </td>
+              <td class="py-2 px-3">
+                <span v-if="row.has_hub_photo" class="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-xs">Yes<span v-if="row.photo_source"> · {{ row.photo_source }}</span></span>
+                <span v-else class="inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-xs">Missing</span>
+              </td>
+              <td class="py-2 px-3">
+                <div class="flex items-center gap-2">
+                  <img v-if="row.google_photo_url" :src="row.google_photo_url" alt="" class="w-8 h-8 rounded-full object-cover border border-slate-200" referrerpolicy="no-referrer" />
+                  <span v-if="row.has_google_photo" class="inline-flex items-center rounded-full bg-sycamore-50 text-sycamore-700 border border-sycamore-200 px-2 py-0.5 text-xs">Available</span>
+                  <span v-else-if="!row.has_google_account" class="inline-flex items-center rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 text-xs">No Google account</span>
+                  <span v-else class="inline-flex items-center rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 text-xs">None in Google</span>
+                </div>
+              </td>
+              <td class="py-2 px-3 text-xs text-slate-500">
+                <div v-if="row.avatar_locked" class="text-amber-700">Photo locked - sync will skip</div>
+                <div v-if="!row.has_auth_user" class="text-slate-400">No Hub login yet</div>
+                <div v-if="!row.has_hub_photo && row.has_google_photo && !row.avatar_locked && row.has_auth_user" class="text-emerald-700">Will be filled on next photo sync</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 

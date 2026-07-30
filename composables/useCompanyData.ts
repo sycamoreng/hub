@@ -32,6 +32,7 @@ export function useCompanyData() {
     const { data, error } = await supabase
       .from('locations')
       .select('*, staff_members(count)')
+      .eq('staff_members.is_active', true)
       .order('is_headquarters', { ascending: false })
       .order('name')
     if (error) throw error

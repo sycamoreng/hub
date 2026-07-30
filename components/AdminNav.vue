@@ -57,11 +57,12 @@ const groups: NavGroup[] = [
       { to: '/admin/email-templates', label: 'Email Templates', icon: 'book', section: 'email-templates' },
       { to: '/admin/broadcast', label: 'Broadcast', icon: 'mail', section: 'broadcast' },
       { to: '/admin/chat-spaces', label: 'Chat Spaces', icon: 'chat', section: 'communication' },
+      { to: '/admin/forums', label: 'Forums', icon: 'chat', section: 'forums' },
       { to: '/admin/raffle', label: "Workers' Day Raffle", icon: 'sparkle', section: 'raffle' },
       { to: '/admin/gamification', label: 'Gamification', icon: 'star', section: 'gamification' },
       { to: '/admin/leadership-qa', label: 'Leadership Q&A', icon: 'chat', section: 'leadership' },
       { to: '/admin/requests', label: 'Service Requests', icon: 'check', section: 'requests' },
-      { to: '/admin/playlists', label: 'Playlists', icon: 'sparkle', section: 'gamification' },
+      { to: '/admin/playlists', label: 'Playlists', icon: 'sparkle', section: 'playlists' },
       { to: '/admin/digest', label: 'Hub Digest', icon: 'mail', section: 'email' }
     ]
   },
@@ -72,7 +73,7 @@ const groups: NavGroup[] = [
     items: [
       { to: '/admin/policies', label: 'Policies', icon: 'book', section: 'policies' },
       { to: '/admin/benefits', label: 'Benefits', icon: 'gift', section: 'benefits' },
-      { to: '/admin/hmo', label: 'HMO Providers', icon: 'gift', section: 'benefits' },
+      { to: '/admin/hmo', label: 'HMO Providers', icon: 'gift', section: 'hmo' },
       { to: '/admin/learning-budgets', label: 'Learning Budgets', icon: 'card', section: 'benefits' },
       { to: '/admin/branding', label: 'Branding', icon: 'palette', section: 'branding' },
       { to: '/admin/locations', label: 'Locations', icon: 'map', section: 'locations' },

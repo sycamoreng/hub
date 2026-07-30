@@ -75,7 +75,7 @@ Deno.serve(async (req: Request) => {
       ? `The company is called ${companyInfo.name || "Sycamore"}. ${companyInfo.description || ""}`
       : "The company is called Sycamore, a fintech/technology company in Nigeria.";
 
-    const sparkPrompt = `You are generating trivia questions for a "Daily Spark" engagement feature at a workplace. Staff answer one question per day to earn points and stay engaged.
+    const sparkPrompt = `You are generating trivia questions for a "Daily Spark" engagement feature at a workplace. Sycamore staff members are called Sytizens (NEVER "Sycamorite" or any other invented variant), and each Sytizen answers one question per day to earn points and stay engaged.
 
 ${companyContext}
 

@@ -92,7 +92,9 @@ async function generateAIMessage(
   ].filter(Boolean).join("\n");
 
   const prompt = type === "birthday"
-    ? `Write a warm, fun birthday message for a colleague at a company called Sycamore. The message should come from "Sycamore Bot" (a friendly company bot) wishing the person happy birthday on behalf of the whole team.
+    ? `Write a warm, fun birthday message for a Sytizen (that's what we call Sycamore staff members) at a company called Sycamore. The message should come from "Sycamore Bot" (a friendly company bot) wishing the person happy birthday on behalf of the whole team of Sytizens.
+
+IMPORTANT: The ONLY correct term for a Sycamore staff member is "Sytizen". NEVER write "Sycamorite", "Sycamorean", or any other invented variant.
 
 Person details:
 ${context}
@@ -101,7 +103,7 @@ Rules:
 - Keep it 2-3 sentences max
 - Be warm, celebratory, and personalized to their role/department if possible
 - Use ${pronoun}/${possessive} pronouns appropriately
-- End with an invitation for colleagues to drop reactions/comments
+- End with an invitation for fellow Sytizens to drop reactions/comments
 - Do NOT use hashtags
 - Do NOT start with "Hey everyone" or similar generic openings
 - Start directly addressing the celebration (e.g. "Happy Birthday, ${firstName}!")
@@ -109,7 +111,9 @@ Rules:
 - You can reference their role/department in a fun way
 
 Return ONLY the message text, no quotes or extra formatting.`
-    : `Write a warm work anniversary message for a colleague at a company called Sycamore. The message should come from "Sycamore Bot" (a friendly company bot) celebrating the person's milestone on behalf of the whole team.
+    : `Write a warm work anniversary message for a Sytizen (that's what we call Sycamore staff members) at a company called Sycamore. The message should come from "Sycamore Bot" (a friendly company bot) celebrating the Sytizen's milestone on behalf of the whole team.
+
+IMPORTANT: The ONLY correct term for a Sycamore staff member is "Sytizen". NEVER write "Sycamorite", "Sycamorean", or any other invented variant.
 
 Person details:
 ${context}
@@ -119,7 +123,7 @@ Rules:
 - Be warm, celebratory, and reference their ${person.years} year${person.years === 1 ? "" : "s"} at the company
 - Personalize to their role/department if possible
 - Use ${pronoun}/${possessive} pronouns appropriately
-- End with an invitation for colleagues to drop reactions/comments
+- End with an invitation for fellow Sytizens to drop reactions/comments
 - Do NOT use hashtags
 - Do NOT start with "Hey everyone" or similar generic openings
 - Start directly addressing the milestone (e.g. "Cheers to ${firstName}!")
@@ -187,6 +191,8 @@ async function broadcastToGoogleChat(
   type: "birthday" | "anniversary",
   personName: string,
   message: string,
+  postId: string | null,
+  appBaseUrl: string | null,
   years?: number
 ) {
   const emoji = type === "birthday" ? "\u{1F382}" : "\u{1F389}";
@@ -194,14 +200,26 @@ async function broadcastToGoogleChat(
     ? `${emoji} Happy Birthday, ${personName}!`
     : `${emoji} ${personName} - ${years} Year${years === 1 ? "" : "s"} at Sycamore!`;
 
+  const widgets: any[] = [{ textParagraph: { text: message } }];
+
+  if (postId && appBaseUrl) {
+    const postUrl = `${appBaseUrl.replace(/\/$/, "")}/feed`;
+    widgets.push({
+      buttonList: {
+        buttons: [{
+          text: "Celebrate on the Hub",
+          onClick: { openLink: { url: postUrl } },
+        }],
+      },
+    });
+  }
+
   const card = {
     cardsV2: [{
       cardId: `celebration-${Date.now()}`,
       card: {
         header: { title },
-        sections: [{
-          widgets: [{ textParagraph: { text: message } }],
-        }],
+        sections: [{ widgets }],
       },
     }],
   };
@@ -364,6 +382,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const results = { birthdays: 0, anniversaries: 0, notifications: 0, posts: 0, chat_broadcasts: 0 };
+    const appBaseUrl = Deno.env.get("APP_BASE_URL") || null;
 
     // --- Send birthday notifications and create posts ---
     for (const person of birthdayPeople) {
@@ -403,19 +422,19 @@ Deno.serve(async (req: Request) => {
       }
 
       // Create bot-authored birthday post in the feed
-      const { error: postErr } = await supabase.from("posts").insert({
+      const { data: postData, error: postErr } = await supabase.from("posts").insert({
         author_id: null,
         content: postContent,
         post_kind: "birthday",
         post_type: "celebration",
         template_data: { name: person.full_name, staff_id: person.id, auto: true, bot: true },
         is_published: true,
-      });
+      }).select("id").maybeSingle();
       if (!postErr) results.posts++;
 
       // Broadcast to Google Chat
       if (chatWebhookUrl) {
-        const sent = await broadcastToGoogleChat(chatWebhookUrl, "birthday", person.full_name, postContent);
+        const sent = await broadcastToGoogleChat(chatWebhookUrl, "birthday", person.full_name, postContent, postData?.id || null, appBaseUrl);
         if (sent) results.chat_broadcasts++;
       }
 
@@ -483,19 +502,19 @@ Deno.serve(async (req: Request) => {
       }
 
       // Create bot-authored anniversary post in the feed
-      const { error: postErr } = await supabase.from("posts").insert({
+      const { data: postData2, error: postErr } = await supabase.from("posts").insert({
         author_id: null,
         content: postContent,
         post_kind: "anniversary",
         post_type: "celebration",
         template_data: { name: person.full_name, years: person.years, staff_id: person.id, auto: true, bot: true },
         is_published: true,
-      });
+      }).select("id").maybeSingle();
       if (!postErr) results.posts++;
 
       // Broadcast to Google Chat
       if (chatWebhookUrl) {
-        const sent = await broadcastToGoogleChat(chatWebhookUrl, "anniversary", person.full_name, postContent, person.years);
+        const sent = await broadcastToGoogleChat(chatWebhookUrl, "anniversary", person.full_name, postContent, postData2?.id || null, appBaseUrl, person.years);
         if (sent) results.chat_broadcasts++;
       }
 

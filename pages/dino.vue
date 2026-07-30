@@ -1,8 +1,183 @@
 <script setup lang="ts">
 import { useSupabase } from '~/utils/supabase'
+import { useDinoMatch, type DinoMatchBoard, type DinoMatchPlayer } from '~/composables/useDinoMatch'
 
 const supabase = useSupabase()
 const toast = useToast()
+const route = useRoute()
+const router = useRouter()
+const dinoMatch = useDinoMatch()
+
+const activeTab = ref<'solo' | 'multiplayer'>((route.query.tab as string) === 'multi' || route.query.match ? 'multiplayer' : 'solo')
+const activeMatchId = ref<string | null>(null)
+const matchBoard = ref<DinoMatchBoard | null>(null)
+const joinCode = ref((route.query.match as string) || '')
+const creatingRoom = ref(false)
+const joiningRoom = ref(false)
+const selectedTimeLimit = ref<number | null>(60)
+const matchCountdown = ref<number | null>(null)
+const advancing = ref(false)
+const roundsInput = ref(1)
+let matchUnsubscribe: (() => void) | null = null
+let matchTimerInterval: ReturnType<typeof setInterval> | null = null
+
+const matchMatch = computed(() => matchBoard.value?.match ?? null)
+const matchPlayers = computed(() => (matchBoard.value?.players ?? []).filter(p => p.status !== 'left'))
+const isHost = computed(() => matchMatch.value && me.value && matchMatch.value.host_user_id === me.value)
+const me = ref<string | null>(null)
+const myMatchPlayer = computed<DinoMatchPlayer | null>(() => matchPlayers.value.find(p => p.user_id === me.value) ?? null)
+const matchTimerUrgent = computed(() => matchCountdown.value !== null && matchCountdown.value <= 10)
+const matchTimerWarning = computed(() => matchCountdown.value !== null && matchCountdown.value <= 30 && matchCountdown.value > 10)
+
+function formatMatchTime(secs: number): string {
+  const m = Math.floor(secs / 60)
+  const s = secs % 60
+  return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`
+}
+
+function startMatchTimer() {
+  stopMatchTimer()
+  if (!matchMatch.value?.deadline_at) return
+  matchTimerInterval = setInterval(() => {
+    if (!matchMatch.value?.deadline_at) { stopMatchTimer(); return }
+    const remaining = Math.max(0, Math.ceil((new Date(matchMatch.value.deadline_at).getTime() - Date.now()) / 1000))
+    matchCountdown.value = remaining
+    if (remaining <= 0) { stopMatchTimer(); refreshMatch() }
+  }, 1000)
+}
+function stopMatchTimer() { if (matchTimerInterval) { clearInterval(matchTimerInterval); matchTimerInterval = null } }
+
+async function refreshMatch() {
+  if (!activeMatchId.value) return
+  try {
+    matchBoard.value = await dinoMatch.loadBoard(activeMatchId.value)
+    if (matchBoard.value?.match) {
+      roundsInput.value = Math.max(1, (matchBoard.value.match as any).total_rounds ?? 1)
+    }
+    if (matchBoard.value?.match?.status === 'active' && matchBoard.value.match.deadline_at && !matchTimerInterval) startMatchTimer()
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not load room')
+  }
+}
+
+async function saveRounds() {
+  if (!matchMatch.value) return
+  try {
+    await dinoMatch.setRounds(matchMatch.value.id, roundsInput.value)
+    toast.success(`Best of ${roundsInput.value}`)
+    await refreshMatch()
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not update rounds')
+  }
+}
+
+async function advanceRound() {
+  if (!matchMatch.value || advancing.value) return
+  advancing.value = true
+  try {
+    await dinoMatch.nextRound(matchMatch.value.id)
+    await refreshMatch()
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not start next round')
+  } finally {
+    advancing.value = false
+  }
+}
+
+async function handleCreateRoom() {
+  creatingRoom.value = true
+  try {
+    const m = await dinoMatch.createMatch({ timeLimit: selectedTimeLimit.value })
+    activeMatchId.value = m.id
+    router.replace({ query: { tab: 'multi', match: m.code } })
+    await refreshMatch()
+    matchUnsubscribe = dinoMatch.subscribe(m.id, refreshMatch)
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not create room')
+  } finally {
+    creatingRoom.value = false
+  }
+}
+
+async function handleJoinRoom() {
+  if (!joinCode.value.trim()) return
+  joiningRoom.value = true
+  try {
+    const m = await dinoMatch.joinByCode(joinCode.value.trim())
+    activeMatchId.value = m.id
+    router.replace({ query: { tab: 'multi', match: m.code } })
+    await refreshMatch()
+    matchUnsubscribe = dinoMatch.subscribe(m.id, refreshMatch)
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not join room')
+  } finally {
+    joiningRoom.value = false
+  }
+}
+
+async function handleLeaveRoom() {
+  if (activeMatchId.value && matchMatch.value?.status === 'pending') {
+    try { await dinoMatch.leave(activeMatchId.value) } catch {}
+  }
+  if (matchUnsubscribe) { matchUnsubscribe(); matchUnsubscribe = null }
+  stopMatchTimer()
+  activeMatchId.value = null
+  matchBoard.value = null
+  joinCode.value = ''
+  router.replace({ query: { tab: 'multi' } })
+}
+
+async function handleStartMatch() {
+  if (!activeMatchId.value) return
+  try {
+    await dinoMatch.start(activeMatchId.value)
+    await refreshMatch()
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not start')
+  }
+}
+
+async function handleMatchJoinAsPlayer() {
+  if (!matchMatch.value) return
+  try {
+    await dinoMatch.joinByCode(matchMatch.value.code)
+    await refreshMatch()
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not join')
+  }
+}
+
+function copyMatchInfo(text: string, label: string) {
+  navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied`)).catch(() => toast.error('Copy failed'))
+}
+
+function matchStandings(): DinoMatchPlayer[] {
+  return [...matchPlayers.value].sort((a, b) => {
+    const sa = ((a as any).series_points ?? 0) + ((a as any).points_awarded ?? 0)
+    const sb = ((b as any).series_points ?? 0) + ((b as any).points_awarded ?? 0)
+    if (sa !== sb) return sb - sa
+    if (a.score !== b.score) return b.score - a.score
+    return b.duration_ms - a.duration_ms
+  })
+}
+
+function seriesPts(p: DinoMatchPlayer): number {
+  return ((p as any).series_points ?? 0) + ((p as any).points_awarded ?? 0)
+}
+
+const seriesComplete = computed(() =>
+  !!matchMatch.value && matchMatch.value.status === 'finished' && ((matchMatch.value as any).current_round ?? 1) >= ((matchMatch.value as any).total_rounds ?? 1)
+)
+const hasMoreRounds = computed(() =>
+  !!matchMatch.value && matchMatch.value.status === 'finished' && ((matchMatch.value as any).current_round ?? 1) < ((matchMatch.value as any).total_rounds ?? 1)
+)
+
+function matchRankBadge(i: number): string {
+  if (i === 0) return 'bg-amber-100 text-amber-700'
+  if (i === 1) return 'bg-slate-200 text-slate-700'
+  if (i === 2) return 'bg-orange-100 text-orange-700'
+  return 'bg-slate-100 text-slate-500'
+}
 
 type Phase = 'idle' | 'running' | 'over'
 
@@ -78,11 +253,15 @@ function endGame() {
   if (rafId !== null) cancelAnimationFrame(rafId)
   rafId = null
   const finalScore = Math.floor(score.value)
+  const durationMs = performance.now() - runStartedAt
   const isPb = finalScore > personalBest.value
   lastScore.value = finalScore
   lastIsPb.value = isPb
   if (isPb) personalBest.value = finalScore
-  void submitRun(finalScore, performance.now() - runStartedAt)
+  void submitRun(finalScore, durationMs)
+  if (activeMatchId.value && matchMatch.value?.status === 'active') {
+    void dinoMatch.crash(activeMatchId.value, finalScore, durationMs).then(b => { matchBoard.value = b }).catch(() => {})
+  }
 }
 
 async function submitRun(finalScore: number, durationMs: number) {
@@ -119,39 +298,15 @@ async function loadPersonalBest() {
 async function loadLeaderboard() {
   loadingBoard.value = true
   try {
-    const { data } = await supabase
-      .from('dino_runner_scores')
-      .select('user_id, score')
-    const bestByUser = new Map<string, number>()
-    for (const row of (data ?? []) as Array<{ user_id: string; score: number }>) {
-      const cur = bestByUser.get(row.user_id) ?? 0
-      if (row.score > cur) bestByUser.set(row.user_id, row.score)
-    }
-    const userIds = Array.from(bestByUser.keys())
-    if (userIds.length === 0) {
-      leaderboard.value = []
-      return
-    }
-    const [{ data: staff }, { data: profiles }] = await Promise.all([
-      supabase.from('staff_members').select('full_name, role, auth_user_id').in('auth_user_id', userIds),
-      supabase.from('user_profiles').select('user_id, avatar_url').in('user_id', userIds)
-    ])
-    const staffMap = new Map((staff ?? []).map((s: any) => [s.auth_user_id, s]))
-    const profMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]))
-    leaderboard.value = userIds
-      .map(uid => {
-        const s = staffMap.get(uid) as any
-        const p = profMap.get(uid) as any
-        return {
-          user_id: uid,
-          best: bestByUser.get(uid) ?? 0,
-          name: s?.full_name || 'Sycamore staff',
-          avatar: p?.avatar_url ?? null,
-          role: s?.role ?? null
-        }
-      })
-      .sort((a, b) => b.best - a.best)
-      .slice(0, 10)
+    const { data, error } = await supabase.rpc('dino_leaderboard', { p_limit: 10 })
+    if (error) throw error
+    leaderboard.value = ((data ?? []) as any[]).map(row => ({
+      user_id: row.user_id,
+      best: row.best,
+      name: row.name ?? 'Sycamore staff',
+      avatar: row.avatar ?? null,
+      role: row.role ?? null
+    }))
   } finally {
     loadingBoard.value = false
   }
@@ -496,6 +651,8 @@ function setDuck(active: boolean) {
 }
 
 function onKeyDown(e: KeyboardEvent) {
+  const tag = (e.target as HTMLElement)?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
     e.preventDefault()
     jump()
@@ -531,7 +688,7 @@ function fitCanvas() {
   draw()
 }
 
-onMounted(() => {
+onMounted(async () => {
   fitCanvas()
   window.addEventListener('resize', fitCanvas)
   window.addEventListener('keydown', onKeyDown)
@@ -539,6 +696,9 @@ onMounted(() => {
   void loadPersonalBest()
   void loadLeaderboard()
   draw()
+  const { data } = await supabase.auth.getUser()
+  me.value = data.user?.id ?? null
+  if (joinCode.value) { await handleJoinRoom() }
 })
 
 onBeforeUnmount(() => {
@@ -546,6 +706,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', fitCanvas)
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('keyup', onKeyUp)
+  if (matchUnsubscribe) matchUnsubscribe()
+  stopMatchTimer()
 })
 
 useHead({ title: 'Sycamore Run' })
@@ -562,113 +724,298 @@ useHead({ title: 'Sycamore Run' })
       <p class="mt-1 text-xs sm:text-sm text-slate-500">Hop the cups, dodge the canopies, fly past the birds.</p>
     </header>
 
-    <div ref="containerRef" class="bg-white border border-slate-200 rounded-3xl p-3 sm:p-4 shadow-sm">
-      <div class="relative" @touchstart="onTouchStart">
-        <canvas
-          ref="canvasRef"
-          class="block w-full rounded-2xl bg-emerald-50/40 border border-emerald-100"
-          tabindex="0"
-        />
-
-        <div
-          v-if="phase === 'idle'"
-          class="absolute inset-0 flex flex-col items-center justify-center text-center px-4"
-        >
-          <div class="bg-white/90 backdrop-blur rounded-2xl border border-emerald-200 px-6 py-5 max-w-sm shadow">
-            <div class="text-emerald-700 font-bold uppercase tracking-[0.2em] text-[11px]">Ready</div>
-            <div class="text-lg font-semibold text-slate-900 mt-1">Tap or press Space to run</div>
-            <div class="mt-2 text-xs text-slate-500">Up arrow / Space to jump &middot; Down arrow to duck</div>
-            <button
-              type="button"
-              class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold"
-              @click="startGame"
-            >
-              Start running
-            </button>
-          </div>
-        </div>
-
-        <div
-          v-else-if="phase === 'over'"
-          class="absolute inset-0 flex flex-col items-center justify-center text-center px-4"
-        >
-          <div class="bg-white/95 backdrop-blur rounded-2xl border border-emerald-200 px-6 py-5 max-w-sm shadow-lg">
-            <div class="text-emerald-700 font-bold uppercase tracking-[0.2em] text-[11px]">Run finished</div>
-            <div class="mt-1 text-2xl sm:text-3xl font-bold text-slate-900 tabular-nums">{{ lastScore }}</div>
-            <div v-if="lastIsPb" class="mt-1 text-emerald-700 text-sm font-semibold">New personal best!</div>
-            <div v-else class="mt-1 text-slate-500 text-xs">Personal best: {{ personalBest }}</div>
-            <button
-              type="button"
-              class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold"
-              @click="startGame"
-            >
-              Run again
-            </button>
-            <div class="mt-2 text-[11px] text-slate-400" v-if="submitting">Saving your run...</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-4 grid grid-cols-3 gap-3 text-center">
-        <div class="rounded-xl border border-slate-200 py-3">
-          <div class="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">Score</div>
-          <div class="text-xl font-bold text-slate-900 tabular-nums">{{ Math.floor(score) }}</div>
-        </div>
-        <div class="rounded-xl border border-slate-200 py-3">
-          <div class="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">Personal best</div>
-          <div class="text-xl font-bold text-slate-900 tabular-nums">{{ personalBest }}</div>
-        </div>
-        <div class="rounded-xl border border-slate-200 py-3">
-          <div class="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">Status</div>
-          <div class="text-xl font-bold text-emerald-700 capitalize">{{ phase }}</div>
-        </div>
-      </div>
+    <!-- Tabs -->
+    <div class="flex gap-1 mb-6 p-1 rounded-xl bg-slate-100 max-w-xs mx-auto">
+      <button type="button" class="flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-all"
+        :class="activeTab === 'solo' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+        @click="activeTab = 'solo'">Solo</button>
+      <button type="button" class="flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-all"
+        :class="activeTab === 'multiplayer' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+        @click="activeTab = 'multiplayer'">Multiplayer</button>
     </div>
 
-    <section class="mt-8">
-      <div class="flex items-end justify-between mb-3">
-        <h2 class="text-xl font-semibold text-slate-900">Top runners</h2>
-        <button
-          type="button"
-          class="text-xs text-emerald-700 hover:text-emerald-800 font-semibold"
-          @click="loadLeaderboard"
-        >
-          Refresh
-        </button>
+    <!-- === SOLO TAB === -->
+    <div v-show="activeTab === 'solo'">
+      <div ref="containerRef" class="bg-white border border-slate-200 rounded-3xl p-3 sm:p-4 shadow-sm">
+        <div class="relative" @touchstart="onTouchStart">
+          <canvas ref="canvasRef" class="block w-full rounded-2xl bg-emerald-50/40 border border-emerald-100" tabindex="0" />
+          <div v-if="phase === 'idle'" class="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+            <div class="bg-white/90 backdrop-blur rounded-2xl border border-emerald-200 px-6 py-5 max-w-sm shadow">
+              <div class="text-emerald-700 font-bold uppercase tracking-[0.2em] text-[11px]">Ready</div>
+              <div class="text-lg font-semibold text-slate-900 mt-1">Tap or press Space to run</div>
+              <div class="mt-2 text-xs text-slate-500">Up arrow / Space to jump &middot; Down arrow to duck</div>
+              <button type="button" class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold" @click="startGame">Start running</button>
+            </div>
+          </div>
+          <div v-else-if="phase === 'over'" class="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+            <div class="bg-white/95 backdrop-blur rounded-2xl border border-emerald-200 px-6 py-5 max-w-sm shadow-lg">
+              <div class="text-emerald-700 font-bold uppercase tracking-[0.2em] text-[11px]">Run finished</div>
+              <div class="mt-1 text-2xl sm:text-3xl font-bold text-slate-900 tabular-nums">{{ lastScore }}</div>
+              <div v-if="lastIsPb" class="mt-1 text-emerald-700 text-sm font-semibold">New personal best!</div>
+              <div v-else class="mt-1 text-slate-500 text-xs">Personal best: {{ personalBest }}</div>
+              <button type="button" class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold" @click="startGame">Run again</button>
+              <div class="mt-2 text-[11px] text-slate-400" v-if="submitting">Saving your run...</div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-3 gap-3 text-center">
+          <div class="rounded-xl border border-slate-200 py-3">
+            <div class="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">Score</div>
+            <div class="text-xl font-bold text-slate-900 tabular-nums">{{ Math.floor(score) }}</div>
+          </div>
+          <div class="rounded-xl border border-slate-200 py-3">
+            <div class="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">Personal best</div>
+            <div class="text-xl font-bold text-slate-900 tabular-nums">{{ personalBest }}</div>
+          </div>
+          <div class="rounded-xl border border-slate-200 py-3">
+            <div class="text-[11px] uppercase tracking-[0.2em] text-slate-400 font-semibold">Status</div>
+            <div class="text-xl font-bold text-emerald-700 capitalize">{{ phase }}</div>
+          </div>
+        </div>
       </div>
 
-      <div v-if="loadingBoard" class="text-sm text-slate-400 py-6 text-center">Loading leaderboard...</div>
-      <div v-else-if="leaderboard.length === 0" class="text-sm text-slate-400 py-6 text-center bg-white border border-slate-200 rounded-2xl">
-        No runs yet. Be the first to set a record.
+      <section class="mt-8">
+        <div class="flex items-end justify-between mb-3">
+          <h2 class="text-xl font-semibold text-slate-900">Top runners</h2>
+          <button type="button" class="text-xs text-emerald-700 hover:text-emerald-800 font-semibold" @click="loadLeaderboard">Refresh</button>
+        </div>
+        <div v-if="loadingBoard" class="text-sm text-slate-400 py-6 text-center">Loading leaderboard...</div>
+        <div v-else-if="leaderboard.length === 0" class="text-sm text-slate-400 py-6 text-center bg-white border border-slate-200 rounded-2xl">No runs yet. Be the first to set a record.</div>
+        <ul v-else class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden">
+          <li v-for="(row, i) in leaderboard" :key="row.user_id" class="flex items-center gap-3 px-4 py-3">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" :class="i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-200 text-slate-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'">{{ i + 1 }}</div>
+            <img v-if="row.avatar" :src="row.avatar" :alt="row.name" class="w-9 h-9 rounded-full object-cover border border-slate-200" />
+            <div v-else class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-sm">{{ (row.name?.[0] ?? '?').toUpperCase() }}</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-semibold text-slate-900 truncate">{{ row.name }}</div>
+              <div v-if="row.role" class="text-xs text-slate-500 truncate">{{ row.role }}</div>
+            </div>
+            <div class="text-base font-bold text-slate-900 tabular-nums">{{ row.best }}</div>
+          </li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- === MULTIPLAYER TAB === -->
+    <div v-show="activeTab === 'multiplayer'">
+      <!-- Active room -->
+      <template v-if="activeMatchId && matchBoard">
+        <header class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-amber-50 p-5 mb-5">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div class="text-[11px] uppercase tracking-wider text-emerald-700 font-bold">Sycamore Run Race</div>
+              <h2 class="text-xl font-bold text-slate-900">Multiplayer Room</h2>
+              <p class="text-sm text-slate-600">
+                <span v-if="matchMatch?.status === 'pending'">Lobby. {{ matchPlayers.length }} joined.</span>
+                <span v-else-if="matchMatch?.status === 'active'">Race in progress! Run as far as you can.</span>
+                <span v-else-if="matchMatch?.status === 'finished' && hasMoreRounds">Round {{ (matchMatch as any).current_round }} of {{ (matchMatch as any).total_rounds }} complete. Next round up!</span>
+                <span v-else-if="matchMatch?.status === 'finished'">{{ ((matchMatch as any).total_rounds ?? 1) > 1 ? 'Series complete.' : 'Race complete.' }}</span>
+              </p>
+              <p v-if="matchMatch && ((matchMatch as any).total_rounds ?? 1) > 1" class="text-[11px] mt-1 font-semibold text-sky-700">Round {{ (matchMatch as any).current_round ?? 1 }} of {{ (matchMatch as any).total_rounds ?? 1 }}</p>
+            </div>
+            <div class="flex flex-col items-end gap-1">
+              <div class="font-mono text-2xl font-bold tracking-widest text-slate-900">{{ matchMatch?.code }}</div>
+              <div class="flex gap-2">
+                <button type="button" class="text-xs px-3 py-1 rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50" @click="copyMatchInfo(matchMatch?.code ?? '', 'Code')">Copy code</button>
+              </div>
+            </div>
+          </div>
+          <!-- Timer -->
+          <div v-if="matchMatch?.status === 'active' && matchCountdown !== null" class="mt-4">
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="font-semibold" :class="matchTimerUrgent ? 'text-red-600' : matchTimerWarning ? 'text-amber-600' : 'text-slate-600'">Time Remaining</span>
+              <span class="font-mono font-bold text-lg" :class="matchTimerUrgent ? 'text-red-600 animate-pulse' : matchTimerWarning ? 'text-amber-600' : 'text-slate-900'">{{ formatMatchTime(matchCountdown) }}</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div class="h-full rounded-full transition-all duration-1000 ease-linear"
+                :class="matchTimerUrgent ? 'bg-red-500' : matchTimerWarning ? 'bg-amber-400' : 'bg-emerald-500'"
+                :style="{ width: matchMatch?.time_limit_seconds ? Math.max(0, (matchCountdown / matchMatch.time_limit_seconds) * 100) + '%' : '100%' }"></div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Lobby -->
+        <div v-if="matchMatch?.status === 'pending'" class="space-y-4">
+          <article class="card p-5">
+            <h3 class="text-sm font-bold text-slate-900 mb-3">Players ({{ matchPlayers.length }} / {{ matchMatch.max_players }})</h3>
+            <ul class="space-y-2">
+              <li v-for="p in matchPlayers" :key="p.user_id" class="flex items-center justify-between text-sm">
+                <span class="truncate font-medium text-slate-800">
+                  {{ p.full_name ?? 'Team member' }}
+                  <span v-if="p.user_id === matchMatch.host_user_id" class="text-[11px] uppercase text-emerald-700 font-bold ml-1">Host</span>
+                </span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">Ready</span>
+              </li>
+            </ul>
+          </article>
+          <article v-if="isHost" class="card p-5">
+            <h3 class="text-sm font-bold text-slate-900 mb-3">Series length</h3>
+            <div class="flex flex-wrap items-center gap-2">
+              <label class="text-xs font-bold text-slate-700">Rounds</label>
+              <select v-model.number="roundsInput" class="text-xs px-2 py-1 rounded border border-slate-300 bg-white">
+                <option v-for="n in [1,2,3,5,7,10]" :key="n" :value="n">Best of {{ n }}</option>
+              </select>
+              <button type="button" class="text-xs px-3 py-1.5 rounded-full bg-slate-900 text-white hover:bg-slate-800" @click="saveRounds">Save</button>
+              <span class="text-[11px] text-slate-500">Auto-continues to the next round when a round finishes.</span>
+            </div>
+          </article>
+          <article class="card p-5 flex flex-wrap items-center justify-between gap-3">
+            <div class="text-sm text-slate-700">
+              <span v-if="isHost && !myMatchPlayer">You're hosting but not playing.</span>
+              <span v-else-if="isHost">Click Start when everyone has joined.</span>
+              <span v-else>Waiting for the host to start...</span>
+            </div>
+            <div class="flex gap-2">
+              <button v-if="myMatchPlayer" type="button" class="text-sm px-4 py-2 rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50" @click="handleLeaveRoom">Leave</button>
+              <button v-if="isHost && !myMatchPlayer" type="button" class="text-sm px-4 py-2 rounded-full bg-blue-600 text-white font-semibold hover:bg-blue-700" @click="handleMatchJoinAsPlayer">Join as player</button>
+              <button v-if="isHost" type="button" class="text-sm px-4 py-2 rounded-full bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-40" :disabled="matchPlayers.length < 1" @click="handleStartMatch">Start race</button>
+            </div>
+          </article>
+        </div>
+
+        <!-- Active: game canvas + live scoreboard -->
+        <div v-else-if="matchMatch?.status === 'active'" class="grid lg:grid-cols-[1fr_280px] gap-5 items-start">
+          <div>
+            <div ref="containerRef" class="bg-white border border-slate-200 rounded-3xl p-3 shadow-sm">
+              <div class="relative" @touchstart="onTouchStart">
+                <canvas ref="canvasRef" class="block w-full rounded-2xl bg-emerald-50/40 border border-emerald-100" tabindex="0" />
+                <div v-if="phase === 'idle' && myMatchPlayer?.status === 'playing'" class="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+                  <div class="bg-white/90 backdrop-blur rounded-2xl border border-emerald-200 px-6 py-5 max-w-sm shadow">
+                    <div class="text-emerald-700 font-bold uppercase tracking-[0.2em] text-[11px]">Race started!</div>
+                    <div class="text-lg font-semibold text-slate-900 mt-1">Tap or press Space to run</div>
+                    <button type="button" class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold" @click="startGame">Start running</button>
+                  </div>
+                </div>
+                <div v-else-if="phase === 'over' && myMatchPlayer?.status === 'crashed'" class="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+                  <div class="bg-white/95 backdrop-blur rounded-2xl border border-emerald-200 px-6 py-5 max-w-sm shadow-lg">
+                    <div class="text-emerald-700 font-bold uppercase tracking-[0.2em] text-[11px]">You crashed!</div>
+                    <div class="mt-1 text-2xl font-bold text-slate-900 tabular-nums">{{ lastScore }}</div>
+                    <div class="mt-2 text-sm text-slate-500">Waiting for others to finish...</div>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 flex items-center justify-between px-2">
+                <span class="text-xs text-slate-500">Your score:</span>
+                <span class="text-lg font-bold text-slate-900 tabular-nums">{{ Math.floor(score) }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- Live scoreboard -->
+          <aside class="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 lg:sticky lg:top-4">
+            <h3 class="text-sm font-bold text-slate-900">Live scores</h3>
+            <ol class="space-y-2">
+              <li v-for="(p, i) in matchStandings()" :key="p.user_id" class="flex items-center gap-2 text-xs">
+                <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" :class="matchRankBadge(i)">{{ i + 1 }}</span>
+                <span class="flex-1 truncate font-medium text-slate-800">
+                  {{ p.full_name ?? 'Team member' }}
+                  <span v-if="p.user_id === me" class="text-[10px] uppercase text-emerald-700 font-bold ml-1">You</span>
+                </span>
+                <span class="tabular-nums font-bold text-slate-900">{{ p.score }}</span>
+                <span v-if="p.status === 'crashed'" class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-700">Crashed</span>
+                <span v-else class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700">Running</span>
+              </li>
+            </ol>
+            <button type="button" class="w-full text-xs px-3 py-2 rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50" @click="handleLeaveRoom">Leave room</button>
+          </aside>
+        </div>
+
+        <!-- Finished -->
+        <div v-else-if="matchMatch?.status === 'finished'" class="space-y-5">
+          <article class="card p-6 text-center" :class="matchStandings()[0]?.user_id === me ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'">
+            <h2 class="text-lg font-bold" :class="matchStandings()[0]?.user_id === me ? 'text-amber-800' : 'text-slate-800'">
+              {{ matchStandings()[0]?.user_id === me ? 'You won the race!' : 'Race complete' }}
+            </h2>
+            <p v-if="myMatchPlayer?.points_awarded" class="text-sm mt-1" :class="matchStandings()[0]?.user_id === me ? 'text-amber-600' : 'text-slate-500'">
+              You earned <span class="font-bold">{{ myMatchPlayer.points_awarded }}</span> points
+            </p>
+          </article>
+
+          <!-- Podium -->
+          <article v-if="matchStandings().length >= 1" class="card p-6">
+            <h3 class="text-sm font-bold text-slate-900 text-center mb-6">{{ seriesComplete && ((matchMatch as any)?.total_rounds ?? 1) > 1 ? 'Series Podium' : (((matchMatch as any)?.total_rounds ?? 1) > 1 ? 'Round ' + ((matchMatch as any)?.current_round ?? 1) + ' Podium' : 'Podium') }}</h3>
+            <div class="flex items-end justify-center gap-3 max-w-sm mx-auto">
+              <div v-if="matchStandings()[1]" class="flex flex-col items-center flex-1">
+                <div class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-700 mb-2">{{ matchStandings()[1].full_name?.charAt(0) ?? '?' }}</div>
+                <p class="text-[11px] font-semibold text-slate-700 text-center truncate max-w-[80px]">{{ matchStandings()[1].full_name?.split(' ')[0] ?? 'Player' }}</p>
+                <p class="text-[10px] text-slate-500">{{ seriesPts(matchStandings()[1]) }} pts</p>
+                <div class="w-full mt-2 rounded-t-lg bg-slate-200 flex items-end justify-center" style="height: 60px;"><span class="text-lg font-bold text-slate-600 mb-2">2</span></div>
+              </div>
+              <div v-if="matchStandings()[0]" class="flex flex-col items-center flex-1">
+                <div class="w-12 h-12 rounded-full bg-amber-100 border-2 border-amber-300 flex items-center justify-center text-base font-bold text-amber-700 mb-2">{{ matchStandings()[0].full_name?.charAt(0) ?? '?' }}</div>
+                <p class="text-xs font-bold text-slate-900 text-center truncate max-w-[80px]">{{ matchStandings()[0].full_name?.split(' ')[0] ?? 'Player' }}</p>
+                <p class="text-[10px] text-amber-700 font-semibold">{{ seriesPts(matchStandings()[0]) }} pts</p>
+                <div class="w-full mt-2 rounded-t-lg bg-amber-100 border-2 border-amber-200 flex items-end justify-center" style="height: 90px;"><span class="text-2xl mb-2">&#x1F3C6;</span></div>
+              </div>
+              <div v-if="matchStandings()[2]" class="flex flex-col items-center flex-1">
+                <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-sm font-bold text-orange-700 mb-2">{{ matchStandings()[2].full_name?.charAt(0) ?? '?' }}</div>
+                <p class="text-[11px] font-semibold text-slate-700 text-center truncate max-w-[80px]">{{ matchStandings()[2].full_name?.split(' ')[0] ?? 'Player' }}</p>
+                <p class="text-[10px] text-slate-500">{{ seriesPts(matchStandings()[2]) }} pts</p>
+                <div class="w-full mt-2 rounded-t-lg bg-orange-100 flex items-end justify-center" style="height: 40px;"><span class="text-lg font-bold text-orange-600 mb-2">3</span></div>
+              </div>
+            </div>
+            <ol v-if="matchStandings().length > 3" class="mt-5 space-y-1.5 border-t border-slate-100 pt-4">
+              <li v-for="(p, i) in matchStandings().slice(3)" :key="p.user_id" class="flex items-center gap-3 text-xs px-3 py-1.5 rounded-lg" :class="p.user_id === me ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50'">
+                <span class="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">{{ i + 4 }}</span>
+                <span class="flex-1 truncate font-medium text-slate-800">{{ p.full_name ?? 'Team member' }}</span>
+                <span class="tabular-nums font-bold text-slate-900">{{ seriesPts(p) }}</span>
+              </li>
+            </ol>
+          </article>
+
+          <div v-if="hasMoreRounds" class="rounded-2xl border border-sky-200 bg-sky-50 p-5 flex flex-wrap items-center justify-between gap-3">
+            <div class="text-sm text-sky-900">
+              <strong>Round {{ (matchMatch as any).current_round }} of {{ (matchMatch as any).total_rounds }} finished.</strong>
+              <span class="text-sky-800"> {{ isHost ? 'Start the next round when everyone is ready.' : 'Waiting for the host to start the next round.' }}</span>
+            </div>
+            <button v-if="isHost" type="button" :disabled="advancing" class="text-sm px-4 py-2 rounded-full bg-sky-600 text-white font-semibold hover:bg-sky-700 disabled:opacity-40" @click="advanceRound">
+              {{ advancing ? 'Starting...' : 'Start next round' }}
+            </button>
+          </div>
+
+          <button type="button" class="btn-secondary w-full justify-center" @click="handleLeaveRoom">Leave room</button>
+        </div>
+      </template>
+
+      <!-- Create / Join -->
+      <div v-else class="space-y-5">
+        <article class="card p-6 text-center">
+          <div class="w-14 h-14 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mb-4">
+            <SidebarIcon name="users" class="w-7 h-7" />
+          </div>
+          <h2 class="text-lg font-semibold text-slate-900">Multiplayer Race</h2>
+          <p class="text-sm text-slate-500 mt-1 max-w-sm mx-auto">Race your teammates! Everyone plays simultaneously. Highest score wins.</p>
+
+          <div class="mt-5 max-w-xs mx-auto">
+            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2 text-left">Time Limit</label>
+            <div class="grid grid-cols-5 gap-1.5">
+              <button v-for="opt in [{ label: 'None', value: null }, { label: '30s', value: 30 }, { label: '60s', value: 60 }, { label: '90s', value: 90 }, { label: '3m', value: 180 }]"
+                :key="String(opt.value)" type="button"
+                class="px-2 py-1.5 text-xs font-semibold rounded-lg border transition-all"
+                :class="selectedTimeLimit === opt.value ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'"
+                @click="selectedTimeLimit = opt.value">{{ opt.label }}</button>
+            </div>
+          </div>
+
+          <button type="button" class="btn-primary mt-5 px-8" :disabled="creatingRoom" @click="handleCreateRoom">
+            {{ creatingRoom ? 'Creating...' : 'Create Room' }}
+          </button>
+        </article>
+
+        <div class="relative">
+          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
+          <div class="relative flex justify-center"><span class="bg-white px-3 text-xs font-semibold text-slate-400 uppercase">or join a room</span></div>
+        </div>
+
+        <form class="card p-5" @submit.prevent="handleJoinRoom">
+          <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Room Code</label>
+          <div class="flex gap-3">
+            <input v-model="joinCode" type="text" class="input flex-1 text-center font-mono text-lg uppercase tracking-widest" placeholder="ABCDEF" maxlength="6" :disabled="joiningRoom" />
+            <button type="submit" class="btn-primary px-5" :disabled="joiningRoom || joinCode.trim().length < 4">
+              {{ joiningRoom ? 'Joining...' : 'Join' }}
+            </button>
+          </div>
+        </form>
       </div>
-      <ul v-else class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden">
-        <li
-          v-for="(row, i) in leaderboard"
-          :key="row.user_id"
-          class="flex items-center gap-3 px-4 py-3"
-        >
-          <div
-            class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-            :class="i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-200 text-slate-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'"
-          >
-            {{ i + 1 }}
-          </div>
-          <img
-            v-if="row.avatar"
-            :src="row.avatar"
-            :alt="row.name"
-            class="w-9 h-9 rounded-full object-cover border border-slate-200"
-          />
-          <div v-else class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-sm">
-            {{ (row.name?.[0] ?? '?').toUpperCase() }}
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-semibold text-slate-900 truncate">{{ row.name }}</div>
-            <div v-if="row.role" class="text-xs text-slate-500 truncate">{{ row.role }}</div>
-          </div>
-          <div class="text-base font-bold text-slate-900 tabular-nums">{{ row.best }}</div>
-        </li>
-      </ul>
-    </section>
+    </div>
   </div>
 </template>

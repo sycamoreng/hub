@@ -359,25 +359,37 @@ function statusBadge(p: any): { label: string; cls: string } {
       </article>
     </div>
 
-    <div v-else class="space-y-4">
-      <article class="card p-5">
-        <header class="mb-3">
-          <h3 class="text-base font-bold text-slate-900">Final podium</h3>
-          <p class="text-xs text-slate-500">Ranked by WPM, then accuracy.</p>
-        </header>
-        <ol class="space-y-2">
-          <li v-for="(p, i) in standings" :key="p.id" class="flex items-center justify-between text-sm rounded-xl border border-slate-200 px-3 py-2"
-              :class="i === 0 ? 'bg-leaf-50 border-leaf-200' : 'bg-white'">
-            <div class="flex items-center gap-3 min-w-0">
-              <span class="w-6 text-right text-base font-extrabold text-slate-700 tabular-nums">{{ p.rank ?? (i + 1) }}</span>
-              <span class="truncate font-semibold text-slate-800">{{ p.profile?.full_name ?? 'Team member' }}</span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold" :class="statusBadge(p).cls">{{ statusBadge(p).label }}</span>
-            </div>
-            <span class="font-bold text-sycamore-700 tabular-nums">
-              {{ p.status === 'finished' ? Number(p.wpm).toFixed(1) + ' WPM · ' + Number(p.accuracy).toFixed(0) + '%' : '—' }}
-            </span>
+    <div v-else class="space-y-5">
+      <article class="card p-6">
+        <h3 class="text-sm font-bold text-slate-900 text-center mb-6">Podium</h3>
+        <div class="flex items-end justify-center gap-3 max-w-sm mx-auto" v-if="standings.length >= 1">
+          <div v-if="standings[1]" class="flex flex-col items-center flex-1">
+            <div class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-700 mb-2">{{ standings[1].profile?.full_name?.charAt(0) ?? '?' }}</div>
+            <p class="text-[11px] font-semibold text-slate-700 text-center truncate max-w-[80px]">{{ standings[1].profile?.full_name?.split(' ')[0] ?? 'Player' }}</p>
+            <p class="text-[10px] text-slate-500">{{ standings[1].status === 'finished' ? Number(standings[1].wpm).toFixed(1) + ' WPM' : 'DNF' }}</p>
+            <div class="w-full mt-2 rounded-t-lg bg-slate-200 flex items-end justify-center" style="height: 60px;"><span class="text-lg font-bold text-slate-600 mb-2">2</span></div>
+          </div>
+          <div v-if="standings[0]" class="flex flex-col items-center flex-1">
+            <div class="w-12 h-12 rounded-full bg-amber-100 border-2 border-amber-300 flex items-center justify-center text-base font-bold text-amber-700 mb-2">{{ standings[0].profile?.full_name?.charAt(0) ?? '?' }}</div>
+            <p class="text-xs font-bold text-slate-900 text-center truncate max-w-[80px]">{{ standings[0].profile?.full_name?.split(' ')[0] ?? 'Player' }}</p>
+            <p class="text-[10px] text-amber-700 font-semibold">{{ standings[0].status === 'finished' ? Number(standings[0].wpm).toFixed(1) + ' WPM' : 'DNF' }}</p>
+            <div class="w-full mt-2 rounded-t-lg bg-amber-100 border-2 border-amber-200 flex items-end justify-center" style="height: 90px;"><span class="text-2xl mb-2">&#x1F3C6;</span></div>
+          </div>
+          <div v-if="standings[2]" class="flex flex-col items-center flex-1">
+            <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-sm font-bold text-orange-700 mb-2">{{ standings[2].profile?.full_name?.charAt(0) ?? '?' }}</div>
+            <p class="text-[11px] font-semibold text-slate-700 text-center truncate max-w-[80px]">{{ standings[2].profile?.full_name?.split(' ')[0] ?? 'Player' }}</p>
+            <p class="text-[10px] text-slate-500">{{ standings[2].status === 'finished' ? Number(standings[2].wpm).toFixed(1) + ' WPM' : 'DNF' }}</p>
+            <div class="w-full mt-2 rounded-t-lg bg-orange-100 flex items-end justify-center" style="height: 40px;"><span class="text-lg font-bold text-orange-600 mb-2">3</span></div>
+          </div>
+        </div>
+        <ol v-if="standings.length > 3" class="mt-5 space-y-1.5 border-t border-slate-100 pt-4">
+          <li v-for="(p, i) in standings.slice(3)" :key="p.id" class="flex items-center gap-3 text-xs px-3 py-1.5 rounded-lg bg-slate-50">
+            <span class="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">{{ i + 4 }}</span>
+            <span class="flex-1 truncate font-medium text-slate-800">{{ p.profile?.full_name ?? 'Team member' }}</span>
+            <span class="text-slate-500">{{ p.status === 'finished' ? Number(p.wpm).toFixed(1) + ' WPM' : 'DNF' }}</span>
           </li>
         </ol>
+        <p class="text-xs text-slate-400 text-center mt-3">Ranked by WPM, then accuracy.</p>
       </article>
       <div class="flex justify-end">
         <button class="btn-primary" @click="emit('leave')">Leave room</button>
