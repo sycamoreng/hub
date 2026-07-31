@@ -34,6 +34,7 @@ export interface WordleMatchPlayer {
   points_awarded: number
   series_points: number
   series_wins: number
+  eliminated: boolean
 }
 
 export interface WordleMatchBoard {
@@ -115,6 +116,43 @@ export function useWordleMatch() {
     return data as any
   }
 
+  async function toggleEliminated(matchId: string, userId: string): Promise<{ user_id: string; eliminated: boolean }> {
+    const { data, error } = await supabase.rpc('wordle_match_toggle_eliminated', { p_match_id: matchId, p_user_id: userId })
+    if (error) throw error
+    return data as any
+  }
+
+  async function restart(matchId: string): Promise<void> {
+    const { error } = await supabase.rpc('wordle_match_restart', { p_match_id: matchId })
+    if (error) throw error
+  }
+
+  async function getHint(matchId: string): Promise<string> {
+    const { data, error } = await supabase.rpc('wordle_match_hint_letter', { p_match_id: matchId })
+    if (error) throw error
+    return (data as any)?.hint ?? ''
+  }
+
+  async function getRiddleHint(matchId: string): Promise<string> {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) throw new Error('not signed in')
+    const config = useRuntimeConfig()
+    const url = `${config.public.supabaseUrl}/functions/v1/wordle-hint-riddle`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: config.public.supabaseAnonKey as string,
+      },
+      body: JSON.stringify({ match_id: matchId }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(payload?.error || 'Could not fetch riddle')
+    return payload?.hint ?? ''
+  }
+
   function subscribe(matchId: string, onChange: () => void) {
     const channel = supabase
       .channel(`wordle-match-${matchId}`)
@@ -124,5 +162,5 @@ export function useWordleMatch() {
     return () => { supabase.removeChannel(channel) }
   }
 
-  return { createMatch, joinByCode, lookupByCode, leave, start, submitGuess, loadBoard, setRounds, nextRound, subscribe }
+  return { createMatch, joinByCode, lookupByCode, leave, start, submitGuess, loadBoard, setRounds, nextRound, subscribe, toggleEliminated, restart, getHint, getRiddleHint }
 }

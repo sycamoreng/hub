@@ -17,6 +17,7 @@ export interface GuessWhoMatch {
   finished_at: string | null
   total_rounds: number
   current_round: number
+  clue_mode: 'shared' | 'solo'
 }
 
 export interface GuessWhoMatchPlayer {
@@ -33,6 +34,7 @@ export interface GuessWhoMatchPlayer {
   finished_at: string | null
   full_name: string | null
   role: string | null
+  eliminated: boolean
 }
 
 export interface GuessWhoMatchBoard {
@@ -45,10 +47,11 @@ export interface GuessWhoMatchBoard {
 export function useGuessWhoMatch() {
   const supabase = useSupabase()
 
-  async function createMatch(opts: { staffId?: string; timeLimit?: number | null } = {}): Promise<GuessWhoMatch> {
+  async function createMatch(opts: { staffId?: string; timeLimit?: number | null; clueMode?: 'shared' | 'solo' } = {}): Promise<GuessWhoMatch> {
     const { data, error } = await supabase.rpc('guess_who_match_create', {
       p_staff_id: opts.staffId ?? null,
-      p_time_limit: opts.timeLimit ?? null
+      p_time_limit: opts.timeLimit ?? null,
+      p_clue_mode: opts.clueMode ?? 'shared'
     })
     if (error) throw error
     return data as unknown as GuessWhoMatch
@@ -98,6 +101,23 @@ export function useGuessWhoMatch() {
     return data as any
   }
 
+  async function toggleEliminated(matchId: string, userId: string): Promise<{ user_id: string; eliminated: boolean }> {
+    const { data, error } = await supabase.rpc('guess_who_match_toggle_eliminated', { p_match_id: matchId, p_user_id: userId })
+    if (error) throw error
+    return data as any
+  }
+
+  async function restart(matchId: string): Promise<void> {
+    const { error } = await supabase.rpc('guess_who_match_restart', { p_match_id: matchId })
+    if (error) throw error
+  }
+
+  async function getHint(matchId: string, level = 2): Promise<string> {
+    const { data, error } = await supabase.rpc('guess_who_match_hint', { p_match_id: matchId, p_level: level })
+    if (error) throw error
+    return (data as any)?.hint ?? ''
+  }
+
   function subscribe(matchId: string, onChange: () => void) {
     const channel = supabase
       .channel(`guess-who-match-${matchId}`)
@@ -107,5 +127,5 @@ export function useGuessWhoMatch() {
     return () => { supabase.removeChannel(channel) }
   }
 
-  return { createMatch, joinByCode, leave, start, submitGuess, loadBoard, setRounds, nextRound, subscribe }
+  return { createMatch, joinByCode, leave, start, submitGuess, loadBoard, setRounds, nextRound, subscribe, toggleEliminated, restart, getHint }
 }

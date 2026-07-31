@@ -18,6 +18,7 @@ const activeMatchId = ref<string | null>(null)
 const creatingRoom = ref(false)
 const joiningRoom = ref(false)
 const selectedTimeLimit = ref<number | null>(90)
+const selectedClueMode = ref<'shared' | 'solo'>('shared')
 
 function clueCategoryColor(cat: string): string {
   const colors: Record<string, string> = {
@@ -83,7 +84,7 @@ watch(error, (v) => {
 async function handleCreateRoom() {
   creatingRoom.value = true
   try {
-    const m = await gwMatch.createMatch({ timeLimit: selectedTimeLimit.value })
+    const m = await gwMatch.createMatch({ timeLimit: selectedTimeLimit.value, clueMode: selectedClueMode.value })
     activeMatchId.value = m.id
     router.replace({ query: { tab: 'multi', match: m.code } })
   } catch (e: any) {
@@ -319,6 +320,27 @@ function handleLeaveRoom() {
               <span v-if="selectedTimeLimit">Players get {{ selectedTimeLimit }}s to guess. Solving fast earns bonus points!</span>
               <span v-else>No timer &mdash; players can take their time.</span>
             </p>
+          </div>
+
+          <!-- Clue mode selector -->
+          <div class="mt-5 max-w-xs mx-auto">
+            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2 text-left">Clue Mode</label>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button type="button"
+                class="px-3 py-2 text-xs font-semibold rounded-lg border transition-all text-left"
+                :class="selectedClueMode === 'shared' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-700 border-slate-200 hover:border-purple-300'"
+                @click="selectedClueMode = 'shared'">
+                <div class="font-bold">Shared</div>
+                <div class="text-[10px] font-normal opacity-80 mt-0.5">Anyone's wrong guess reveals the next clue for everyone.</div>
+              </button>
+              <button type="button"
+                class="px-3 py-2 text-xs font-semibold rounded-lg border transition-all text-left"
+                :class="selectedClueMode === 'solo' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-700 border-slate-200 hover:border-purple-300'"
+                @click="selectedClueMode = 'solo'">
+                <div class="font-bold">Solo</div>
+                <div class="text-[10px] font-normal opacity-80 mt-0.5">You only see a new clue after your own wrong guess.</div>
+              </button>
+            </div>
           </div>
 
           <button

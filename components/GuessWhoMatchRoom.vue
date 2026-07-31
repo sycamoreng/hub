@@ -8,7 +8,7 @@ const emit = defineEmits<{ (e: 'leave'): void }>()
 
 const supabase = useSupabase()
 const toast = useToast()
-const { loadBoard, start, submitGuess, leave, joinByCode, subscribe, setRounds, nextRound } = useGuessWhoMatch()
+const { loadBoard, start, submitGuess, leave, joinByCode, subscribe, setRounds, nextRound, toggleEliminated, restart, getHint } = useGuessWhoMatch()
 
 const board = ref<GuessWhoMatchBoard | null>(null)
 const me = ref<{ id: string } | null>(null)
@@ -16,6 +16,12 @@ const firstName = ref('')
 const lastName = ref('')
 const submitting = ref(false)
 const advancing = ref(false)
+const restarting = ref(false)
+const hintText = ref('')
+const hintLevel = ref<1 | 2 | 0>(0)
+const hint1Fetched = ref(false)
+const hint2Fetched = ref(false)
+let hintDismissTimer: ReturnType<typeof setTimeout> | null = null
 const countdown = ref<number | null>(null)
 const roundsInput = ref(1)
 let unsubscribe: (() => void) | null = null
@@ -95,11 +101,58 @@ function startTimer() {
     if (!match.value?.deadline_at) { stopTimer(); return }
     const remaining = Math.max(0, Math.ceil((new Date(match.value.deadline_at).getTime() - Date.now()) / 1000))
     countdown.value = remaining
+    maybeShowHint(remaining)
     if (remaining <= 0) {
       stopTimer()
       refresh()
     }
   }, 1000)
+}
+
+async function maybeShowHint(remaining: number) {
+  const total = match.value?.time_limit_seconds ?? 0
+  if (!total || total <= 0) return
+  if (!myPlayer.value || myPlayer.value.completed || myPlayer.value.eliminated) return
+
+  const elapsed = total - remaining
+  const canFetch2 = elapsed >= total * 0.7
+  const canFetch1 = elapsed >= total * 0.3
+
+  if (!hint2Fetched.value && canFetch2) {
+    hint2Fetched.value = true
+    try {
+      const h = await getHint(match.value!.id, 2)
+      if (h) showHint(h, 2)
+    } catch {}
+    return
+  }
+
+  if (!hint1Fetched.value && canFetch1) {
+    hint1Fetched.value = true
+    try {
+      const h = await getHint(match.value!.id, 1)
+      if (h) showHint(h, 1)
+    } catch {}
+  }
+}
+
+function showHint(text: string, level: 1 | 2) {
+  hintText.value = text
+  hintLevel.value = level
+  if (hintDismissTimer) clearTimeout(hintDismissTimer)
+  hintDismissTimer = setTimeout(() => {
+    hintText.value = ''
+    hintLevel.value = 0
+    hintDismissTimer = null
+  }, level === 1 ? 6000 : 5500)
+}
+
+function resetHints() {
+  if (hintDismissTimer) { clearTimeout(hintDismissTimer); hintDismissTimer = null }
+  hint1Fetched.value = false
+  hint2Fetched.value = false
+  hintText.value = ''
+  hintLevel.value = 0
 }
 
 function stopTimer() {
@@ -131,6 +184,33 @@ async function saveRounds() {
   }
 }
 
+async function toggleKick(userId: string) {
+  if (!match.value) return
+  try {
+    await toggleEliminated(match.value.id, userId)
+    await refresh()
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not update player')
+  }
+}
+
+async function restartRoom() {
+  if (!match.value || restarting.value) return
+  restarting.value = true
+  try {
+    await restart(match.value.id)
+    firstName.value = ''
+    lastName.value = ''
+    resetHints()
+    await refresh()
+    toast.success('New game ready. Start when ready!')
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not restart')
+  } finally {
+    restarting.value = false
+  }
+}
+
 async function advanceRound() {
   if (!match.value || advancing.value) return
   advancing.value = true
@@ -138,6 +218,7 @@ async function advanceRound() {
     await nextRound(match.value.id)
     firstName.value = ''
     lastName.value = ''
+    resetHints()
     await refresh()
   } catch (e: any) {
     toast.error(e?.message ?? 'Could not start next round')
@@ -250,6 +331,10 @@ const hasMoreRounds = computed(() =>
 )
 
 function statusBadge(p: GuessWhoMatchPlayer): { label: string; cls: string } {
+  if (p.eliminated) return { label: 'Sitting out', cls: 'bg-rose-100 text-rose-700' }
+  return _sb(p)
+}
+function _sb(p: GuessWhoMatchPlayer): { label: string; cls: string } {
   if (p.won) return { label: `Solved (${p.guess_count})`, cls: 'bg-emerald-100 text-emerald-800' }
   if (p.completed) return { label: 'Out', cls: 'bg-slate-200 text-slate-700' }
   if (match.value?.status === 'active') return { label: `${p.guess_count} guesses`, cls: 'bg-sky-100 text-sky-800' }
@@ -279,8 +364,14 @@ const remainingCount = computed(() => activePlayers.value.filter(p => !p.complet
             <span v-else-if="match.status === 'finished'">Game complete.</span>
             <span v-else>Room cancelled.</span>
           </p>
-          <div v-if="match.total_rounds > 1" class="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 border border-purple-200 text-[11px] font-bold text-purple-800">
-            Round {{ Math.min(match.current_round, match.total_rounds) }} of {{ match.total_rounds }}
+          <div class="flex flex-wrap items-center gap-1.5 mt-1">
+            <div v-if="match.total_rounds > 1" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 border border-purple-200 text-[11px] font-bold text-purple-800">
+              Round {{ Math.min(match.current_round, match.total_rounds) }} of {{ match.total_rounds }}
+            </div>
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 border text-[11px] font-bold"
+              :class="match.clue_mode === 'solo' ? 'border-fuchsia-200 text-fuchsia-800' : 'border-sky-200 text-sky-800'">
+              {{ match.clue_mode === 'solo' ? 'Solo clues' : 'Shared clues' }}
+            </div>
           </div>
         </div>
         <div class="flex flex-col items-end gap-1">
@@ -312,17 +403,36 @@ const remainingCount = computed(() => activePlayers.value.filter(p => !p.complet
       </div>
     </header>
 
+    <transition name="gwhint">
+      <div v-if="hintText" class="rounded-2xl border px-4 py-3 flex items-center gap-3 shadow-sm border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold bg-amber-200 text-amber-800">
+          <span class="text-base leading-none">{{ hintLevel === 1 ? '?' : '!' }}</span>
+        </div>
+        <div class="text-sm flex-1">
+          <div class="text-[10px] uppercase tracking-wider font-bold text-amber-700">{{ hintLevel === 1 ? 'First hint' : 'Second hint' }}</div>
+          <div class="text-amber-900 font-medium">{{ hintText }}</div>
+        </div>
+      </div>
+    </transition>
+
     <!-- Pending / Lobby -->
     <div v-if="match.status === 'pending'" class="grid lg:grid-cols-2 gap-4">
       <article class="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 class="text-sm font-bold text-slate-900 mb-3">Players ({{ joinedCount }} / {{ match.max_players }})</h3>
         <ul class="space-y-2">
-          <li v-for="p in activePlayers" :key="p.user_id" class="flex items-center justify-between text-sm">
-            <span class="truncate font-medium text-slate-800">
+          <li v-for="p in activePlayers" :key="p.user_id" class="flex items-center justify-between text-sm gap-2">
+            <span class="truncate font-medium" :class="p.eliminated ? 'text-slate-400 line-through' : 'text-slate-800'">
               {{ p.full_name ?? 'Team member' }}
               <span v-if="p.user_id === match.host_user_id" class="text-[11px] uppercase text-purple-700 font-bold ml-1">Host</span>
             </span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">Ready</span>
+            <div class="flex items-center gap-2">
+              <span v-if="p.eliminated" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-700">Sitting out</span>
+              <span v-else class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">Ready</span>
+              <button v-if="isHost && p.user_id !== match.host_user_id" type="button"
+                class="text-[10px] px-2 py-0.5 rounded-full border"
+                :class="p.eliminated ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'border-rose-300 text-rose-600 hover:bg-rose-50'"
+                @click="toggleKick(p.user_id)">{{ p.eliminated ? 'Bring back' : 'Sit out' }}</button>
+            </div>
           </li>
         </ul>
       </article>
@@ -331,7 +441,8 @@ const remainingCount = computed(() => activePlayers.value.filter(p => !p.complet
         <h3 class="text-sm font-bold text-slate-900 mb-2">How this works</h3>
         <ul class="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
           <li>Everyone races to identify the same mystery colleague.</li>
-          <li>Clues are revealed progressively &mdash; each wrong guess unlocks more for <strong>everyone</strong>.</li>
+          <li v-if="match.clue_mode === 'solo'">Each player has their <strong>own clues</strong> &mdash; a wrong guess only reveals the next clue for you.</li>
+          <li v-else>Clues are revealed progressively &mdash; each wrong guess unlocks more for <strong>everyone</strong>.</li>
           <li>Up to {{ match.max_players }} players per room, {{ match.max_guesses }} guesses each.</li>
           <li>First to solve gets up to 15 points + speed bonus.</li>
           <li v-if="match.time_limit_seconds" class="text-amber-700 font-medium">
@@ -393,7 +504,7 @@ const remainingCount = computed(() => activePlayers.value.filter(p => !p.complet
             </li>
             <li v-if="match.status === 'active' && visibleClues.length < totalClues" class="flex gap-3 items-start opacity-50">
               <span class="shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-xs font-bold mt-0.5">?</span>
-              <p class="text-sm text-slate-400 italic">A wrong guess by anyone unlocks the next clue...</p>
+              <p class="text-sm text-slate-400 italic">{{ match.clue_mode === 'solo' ? 'Your next clue unlocks after your own wrong guess...' : 'A wrong guess by anyone unlocks the next clue...' }}</p>
             </li>
           </ol>
         </article>
@@ -514,6 +625,29 @@ const remainingCount = computed(() => activePlayers.value.filter(p => !p.complet
                 <span class="text-slate-500">{{ (p.series_points ?? 0) + (p.points_awarded ?? 0) }} pts</span>
               </li>
             </ol>
+          </div>
+
+          <div v-if="seriesComplete && isHost" class="card p-5 flex flex-wrap items-center justify-between gap-3 border-emerald-200 bg-emerald-50">
+            <div class="text-sm text-emerald-900">
+              <strong>Play again in this same room?</strong>
+              <span class="text-emerald-800"> Everyone stays, scores reset, and you get a fresh person to guess.</span>
+            </div>
+            <button type="button" :disabled="restarting" class="text-sm px-4 py-2 rounded-full bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-40" @click="restartRoom">
+              {{ restarting ? 'Restarting...' : 'Restart game' }}
+            </button>
+          </div>
+
+          <div v-if="isHost && (hasMoreRounds || seriesComplete) && standings.some(p => p.user_id !== match.host_user_id)" class="card p-4 border-amber-200 bg-amber-50">
+            <div class="text-xs font-bold text-amber-900 uppercase tracking-wide mb-2">Roster for next round</div>
+            <p class="text-[11px] text-amber-800 mb-3">Sit players out or bring them back. Takes effect on the next round.</p>
+            <ul class="space-y-1.5">
+              <li v-for="p in standings.filter(pp => pp.user_id !== match.host_user_id)" :key="p.user_id" class="flex items-center justify-between text-sm bg-white/70 rounded-lg px-3 py-1.5">
+                <span class="truncate font-medium" :class="p.eliminated ? 'text-slate-400 line-through' : 'text-slate-800'">{{ p.full_name ?? 'Team member' }}</span>
+                <button type="button" class="text-[10px] px-2 py-0.5 rounded-full border"
+                  :class="p.eliminated ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'border-rose-300 text-rose-600 hover:bg-rose-50'"
+                  @click="toggleKick(p.user_id)">{{ p.eliminated ? 'Bring back' : 'Sit out' }}</button>
+              </li>
+            </ul>
           </div>
 
           <div v-if="hasMoreRounds" class="card p-5 flex flex-wrap items-center justify-between gap-3 border-sky-200 bg-sky-50">

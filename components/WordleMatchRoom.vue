@@ -7,13 +7,19 @@ const emit = defineEmits<{ (e: 'leave'): void }>()
 
 const supabase = useSupabase()
 const toast = useToast()
-const { loadBoard, start, submitGuess, leave, joinByCode, subscribe, setRounds, nextRound } = useWordleMatch()
+const { loadBoard, start, submitGuess, leave, joinByCode, subscribe, setRounds, nextRound, toggleEliminated, restart, getHint, getRiddleHint } = useWordleMatch()
 
 const board = ref<WordleMatchBoard | null>(null)
 const me = ref<{ id: string } | null>(null)
 const currentGuess = ref('')
 const submitting = ref(false)
 const advancing = ref(false)
+const restarting = ref(false)
+const hintText = ref('')
+const hintKind = ref<'riddle' | 'letter' | ''>('')
+const hint1Fetched = ref(false)
+const hint2Fetched = ref(false)
+let hintDismissTimer: ReturnType<typeof setTimeout> | null = null
 const flashBanner = ref('')
 const shakeRow = ref<number | null>(null)
 const revealRow = ref<number | null>(null)
@@ -38,8 +44,56 @@ function startTimer() {
     if (!match.value?.deadline_at) { stopTimer(); return }
     const remaining = Math.max(0, Math.ceil((new Date(match.value.deadline_at).getTime() - Date.now()) / 1000))
     countdown.value = remaining
+    maybeShowHint(remaining)
     if (remaining <= 0) { stopTimer(); refresh() }
   }, 1000)
+}
+
+async function maybeShowHint(remaining: number) {
+  const total = match.value?.time_limit_seconds ?? 0
+  if (!total || total <= 0) return
+  if (!myPlayer.value || myPlayer.value.completed || myPlayer.value.eliminated) return
+
+  const elapsed = total - remaining
+  const canFetchHint2 = elapsed >= total * 0.7
+  const canFetchHint1 = elapsed >= total * 0.3
+
+  if (!hint2Fetched.value && canFetchHint2) {
+    hint2Fetched.value = true
+    try {
+      const h = await getHint(match.value!.id)
+      if (h) showHint(h, 'letter')
+    } catch {}
+    return
+  }
+
+  if (!hint1Fetched.value && canFetchHint1) {
+    hint1Fetched.value = true
+    try {
+      const h = await getRiddleHint(match.value!.id)
+      if (h) showHint(h, 'riddle')
+    } catch {}
+  }
+}
+
+function showHint(text: string, kind: 'riddle' | 'letter') {
+  hintText.value = text
+  hintKind.value = kind
+  if (hintDismissTimer) clearTimeout(hintDismissTimer)
+  const duration = kind === 'riddle' ? 9000 : 5500
+  hintDismissTimer = setTimeout(() => {
+    hintText.value = ''
+    hintKind.value = ''
+    hintDismissTimer = null
+  }, duration)
+}
+
+function resetHints() {
+  if (hintDismissTimer) { clearTimeout(hintDismissTimer); hintDismissTimer = null }
+  hint1Fetched.value = false
+  hint2Fetched.value = false
+  hintText.value = ''
+  hintKind.value = ''
 }
 
 function stopTimer() {
@@ -80,11 +134,37 @@ async function saveRounds() {
   }
 }
 
+async function toggleKick(userId: string) {
+  if (!match.value) return
+  try {
+    await toggleEliminated(match.value.id, userId)
+    await refresh()
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not update player')
+  }
+}
+
+async function restartRoom() {
+  if (!match.value || restarting.value) return
+  restarting.value = true
+  try {
+    await restart(match.value.id)
+    resetHints()
+    await refresh()
+    toast.success('New game ready. Start when ready!')
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Could not restart')
+  } finally {
+    restarting.value = false
+  }
+}
+
 async function advanceRound() {
   if (!match.value || advancing.value) return
   advancing.value = true
   try {
     await nextRound(match.value.id)
+    resetHints()
     await refresh()
   } catch (e: any) {
     toast.error(e?.message ?? 'Could not start next round')
@@ -312,6 +392,7 @@ const hasMoreRounds = computed(() =>
 )
 
 function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
+  if (p.eliminated) return { label: 'Sitting out', cls: 'bg-rose-100 text-rose-700' }
   if (p.won) return { label: 'Solved', cls: 'bg-emerald-100 text-emerald-800' }
   if (p.completed) return { label: 'Out', cls: 'bg-slate-200 text-slate-700' }
   if (match.value?.status === 'active') return { label: 'Playing', cls: 'bg-sky-100 text-sky-800' }
@@ -360,6 +441,27 @@ function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
       </div>
     </header>
 
+    <transition name="hint">
+      <div v-if="hintText" class="rounded-2xl border px-4 py-3 flex items-center gap-3 shadow-sm"
+        :class="hintKind === 'riddle'
+          ? 'border-purple-300 bg-gradient-to-r from-purple-50 via-fuchsia-50 to-indigo-50'
+          : 'border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50'">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold"
+          :class="hintKind === 'riddle' ? 'bg-purple-200 text-purple-800' : 'bg-amber-200 text-amber-800'">
+          <span v-if="hintKind === 'riddle'" class="text-base leading-none">?</span>
+          <span v-else class="text-base leading-none">!</span>
+        </div>
+        <div class="text-sm flex-1">
+          <div class="text-[10px] uppercase tracking-wider font-bold flex items-center gap-2"
+            :class="hintKind === 'riddle' ? 'text-purple-700' : 'text-amber-700'">
+            <span>{{ hintKind === 'riddle' ? 'Cryptic riddle' : 'Letter hint' }}</span>
+            <span v-if="hintKind === 'riddle'" class="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 normal-case tracking-normal font-semibold">AI</span>
+          </div>
+          <div class="font-medium" :class="hintKind === 'riddle' ? 'text-purple-900 italic' : 'text-amber-900'">{{ hintText }}</div>
+        </div>
+      </div>
+    </transition>
+
     <div v-if="flashBanner" class="fixed top-6 left-1/2 -translate-x-1/2 z-40 px-5 py-2.5 rounded-full bg-slate-900 text-white text-sm font-semibold shadow-lg">
       {{ flashBanner }}
     </div>
@@ -368,12 +470,19 @@ function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
       <article class="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 class="text-sm font-bold text-slate-900 mb-3">Players ({{ joinedCount }} / {{ match.max_players }})</h3>
         <ul class="space-y-2">
-          <li v-for="p in activePlayers" :key="p.user_id" class="flex items-center justify-between text-sm">
-            <span class="truncate font-medium text-slate-800">
+          <li v-for="p in activePlayers" :key="p.user_id" class="flex items-center justify-between text-sm gap-2">
+            <span class="truncate font-medium" :class="p.eliminated ? 'text-slate-400 line-through' : 'text-slate-800'">
               {{ p.full_name ?? 'Team member' }}
               <span v-if="p.user_id === match.host_user_id" class="text-[11px] uppercase text-emerald-700 font-bold ml-1">Host</span>
             </span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">Ready</span>
+            <div class="flex items-center gap-2">
+              <span v-if="p.eliminated" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-700">Sitting out</span>
+              <span v-else class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">Ready</span>
+              <button v-if="isHost && p.user_id !== match.host_user_id" type="button"
+                class="text-[10px] px-2 py-0.5 rounded-full border"
+                :class="p.eliminated ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'border-rose-300 text-rose-600 hover:bg-rose-50'"
+                @click="toggleKick(p.user_id)">{{ p.eliminated ? 'Bring back' : 'Sit out' }}</button>
+            </div>
           </li>
         </ul>
       </article>
@@ -381,13 +490,12 @@ function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
       <article class="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 class="text-sm font-bold text-slate-900 mb-2">How this works</h3>
         <ul class="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
-          <li>Everyone races the same hidden word (not the daily one).</li>
-          <li>Up to {{ match.max_players }} players per room.</li>
-          <li>{{ match.letter_count }} letters, {{ match.max_guesses }} guesses each.</li>
-          <li>First to solve gets the biggest points bonus.</li>
-          <li v-if="match.time_limit_seconds" class="text-amber-700 font-medium">Timed: {{ match.time_limit_seconds }}s to solve. Fast solvers get bonus points!</li>
-          <li v-else class="text-slate-400">No time limit.</li>
-          <li v-if="match.total_rounds > 1" class="text-sky-700 font-medium">Best of {{ match.total_rounds }} rounds. Series podium at the end.</li>
+          <li>Everyone races to solve the same {{ match.letter_count }}-letter word.</li>
+          <li>{{ match.max_guesses }} guesses each. First to solve wins the round.</li>
+          <li v-if="match.time_limit_seconds" class="text-amber-700 font-medium">Timed round: {{ match.time_limit_seconds }}s to guess.</li>
+          <li v-else class="text-slate-400">No time limit &mdash; take your time.</li>
+          <li v-if="match.total_rounds > 1" class="text-sky-700 font-medium">Best of {{ match.total_rounds }} rounds.</li>
+          <li>Stuck? Cryptic riddle appears at 30% elapsed, a letter clue at 70%.</li>
         </ul>
         <div v-if="isHost" class="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
           <label class="text-xs font-bold text-slate-700">Rounds</label>
@@ -395,9 +503,7 @@ function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
             <option v-for="n in [1,2,3,5,7,10]" :key="n" :value="n">Best of {{ n }}</option>
           </select>
           <button type="button" class="text-xs px-3 py-1.5 rounded-full bg-slate-900 text-white hover:bg-slate-800" @click="saveRounds">Save</button>
-          <span class="text-[11px] text-slate-500">Auto-continues to the next round when a round finishes.</span>
         </div>
-        <p class="text-xs text-slate-500 mt-3">Share the code <span class="font-mono font-bold">{{ match.code }}</span> or the room link with teammates.</p>
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-2 flex flex-wrap items-center justify-between gap-3">
@@ -409,99 +515,71 @@ function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
         <div class="flex gap-2">
           <button v-if="!isSpectator" type="button" class="text-sm px-4 py-2 rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50" @click="leaveRoom">Leave</button>
           <button v-if="isHost && isSpectator" type="button" class="text-sm px-4 py-2 rounded-full bg-blue-600 text-white font-semibold hover:bg-blue-700" @click="hostJoinAsPlayer">Join as player</button>
-          <button v-if="isHost" type="button" class="text-sm px-4 py-2 rounded-full bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-40" :disabled="joinedCount < 1" @click="hostStart">Start race</button>
+          <button v-if="isHost" type="button" class="text-sm px-4 py-2 rounded-full bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-40" :disabled="joinedCount < 1" @click="hostStart">Start game</button>
         </div>
       </article>
     </div>
 
     <div v-else class="grid lg:grid-cols-[1fr_320px] gap-5 items-start">
       <div class="space-y-5">
-        <div v-if="myRows.length" class="flex flex-col items-center gap-1.5">
-          <div
-            v-for="(row, rIdx) in myRows"
-            :key="rIdx"
-            class="flex gap-1.5"
-            :class="shakeRow === rIdx ? 'animate-[wshake_0.4s_ease]' : ''"
-          >
-            <div
-              v-for="(ch, i) in row.letters"
-              :key="i"
-              class="w-12 h-12 sm:w-14 sm:h-14 border-2 rounded-lg flex items-center justify-center text-xl sm:text-2xl font-bold uppercase transition-all duration-300"
-              :class="[tileClass(row.results[i] ?? '', Boolean(ch), row.active), revealRow === rIdx ? `animate-[wflip_0.6s_ease_${i * 0.12}s_both]` : '']"
-            >
-              {{ ch }}
+        <article v-if="myPlayer" class="rounded-2xl border border-slate-200 bg-white p-5">
+          <div class="grid gap-1.5 justify-center" :style="{ gridTemplateRows: `repeat(${match.max_guesses}, minmax(0, 1fr))` }">
+            <div v-for="(row, ri) in myRows" :key="ri" class="flex gap-1.5 justify-center"
+              :class="[shakeRow === ri ? 'animate-shake' : '', revealRow === ri ? 'row-reveal' : '']">
+              <div v-for="(ch, ci) in row.letters" :key="ci"
+                class="w-11 h-11 sm:w-12 sm:h-12 rounded-md border-2 flex items-center justify-center text-lg font-bold uppercase transition-all"
+                :class="tileClass(row.results[ci] ?? '', !!ch, row.active)">
+                {{ ch }}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div v-if="match.status === 'active' && isSpectator" class="rounded-2xl border border-slate-200 bg-white p-5 text-center">
-          <div class="text-slate-600 font-medium">You're watching as host. Players are racing below.</div>
-        </div>
-
-        <div v-if="match.status === 'active' && myPlayer && !myPlayer.completed" class="space-y-2">
-          <div v-for="(row, rIdx) in keyboardLayout" :key="rIdx" class="flex justify-center gap-1.5">
-            <button
-              v-for="k in row"
-              :key="k"
-              type="button"
-              @click="k === 'ENTER' ? submit() : k === 'BACK' ? backspace() : pressLetter(k)"
-              class="h-11 sm:h-12 rounded-lg font-semibold text-sm sm:text-base transition-all active:scale-95"
-              :class="[
-                k === 'ENTER' || k === 'BACK' ? 'px-3 sm:px-4 text-xs' : 'w-8 sm:w-9 uppercase',
-                k === 'ENTER' || k === 'BACK' ? 'bg-slate-900 text-white hover:bg-slate-800' : keyClass(k)
-              ]"
-            >
-              <span v-if="k === 'BACK'">&larr;</span>
-              <span v-else>{{ k }}</span>
-            </button>
+          <div v-if="match.status === 'active' && !myPlayer.completed" class="mt-5 select-none">
+            <div v-for="(row, ri) in keyboardLayout" :key="ri" class="flex justify-center gap-1 mb-1">
+              <template v-for="k in row" :key="k">
+                <button v-if="k === 'ENTER'" type="button" class="px-3 h-11 rounded-md text-xs font-bold bg-slate-800 text-white hover:bg-slate-700" @click="submit">Enter</button>
+                <button v-else-if="k === 'BACK'" type="button" class="px-3 h-11 rounded-md text-xs font-bold bg-slate-800 text-white hover:bg-slate-700" @click="backspace">&#9003;</button>
+                <button v-else type="button" class="w-8 sm:w-9 h-11 rounded-md text-sm font-bold uppercase transition-colors" :class="keyClass(k)" @click="pressLetter(k)">{{ k }}</button>
+              </template>
+            </div>
           </div>
+        </article>
+
+        <div v-if="match.status === 'active' && isSpectator" class="rounded-2xl border border-slate-200 bg-white p-5 text-center text-sm text-slate-600 font-medium">
+          You're watching as host. Players are racing below.
         </div>
 
         <div v-if="match.status === 'finished'" class="space-y-5">
-          <div class="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-slate-50 p-6 text-center space-y-3">
-            <div v-if="!match.winner_user_id && match.time_limit_seconds" class="text-red-600 font-bold text-sm uppercase tracking-wide">Time's Up!</div>
-            <div v-if="match.target" class="text-slate-800">
-              The word was <span class="inline-block px-3 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold uppercase text-lg tracking-widest">{{ match.target }}</span>
-            </div>
-            <div v-if="myPlayer && myPlayer.won" class="text-emerald-700 font-semibold">
-              You solved it in {{ myPlayer.guess_count }} guess{{ myPlayer.guess_count === 1 ? '' : 'es' }}.
-              <span v-if="myPlayer.points_awarded" class="text-sky-700">+{{ myPlayer.points_awarded }} pts</span>
-            </div>
-            <div v-else-if="myPlayer && !myPlayer.won" class="text-slate-600 text-sm">Better luck next time!</div>
+          <div class="rounded-2xl border p-6 text-center" :class="myPlayer?.won ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'">
+            <div v-if="!match.winner_user_id && match.time_limit_seconds" class="text-red-600 font-bold text-sm uppercase tracking-wide mb-2">Time's Up!</div>
+            <h2 class="text-lg font-bold" :class="myPlayer?.won ? 'text-emerald-800' : 'text-slate-800'">
+              {{ myPlayer?.won ? 'You got it!' : (match.winner_user_id ? 'Someone solved it' : 'Round over') }}
+            </h2>
+            <p v-if="board?.target" class="mt-2 text-sm text-slate-700">The word was <span class="font-mono font-bold uppercase tracking-widest">{{ board.target }}</span>.</p>
+            <p v-if="myPlayer?.won && myPlayer.points_awarded" class="mt-1 text-sm text-emerald-700 font-semibold">+{{ myPlayer.points_awarded }} points</p>
           </div>
 
-          <!-- Podium -->
           <div v-if="standings.length >= 1" class="rounded-2xl border border-slate-200 bg-white p-6">
-            <h3 class="text-sm font-bold text-slate-900 text-center mb-1">{{ seriesComplete && match.total_rounds > 1 ? 'Series Podium' : (match.total_rounds > 1 ? 'Round ' + match.current_round + ' Podium' : 'Podium') }}</h3>
-            <p v-if="match.total_rounds > 1" class="text-[11px] text-slate-500 text-center mb-4">Series score = total points across all rounds</p>
-            <div v-else class="mb-4"></div>
-            <div class="flex items-end justify-center gap-3 max-w-sm mx-auto">
-              <div v-if="standings[1]" class="flex flex-col items-center flex-1">
-                <div class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-700 mb-2">{{ standings[1].full_name?.charAt(0) ?? '?' }}</div>
-                <p class="text-[11px] font-semibold text-slate-700 text-center truncate max-w-[80px]">{{ standings[1].full_name?.split(' ')[0] ?? 'Player' }}</p>
-                <p class="text-[10px] text-slate-500">{{ (standings[1].series_points ?? 0) + (standings[1].points_awarded ?? 0) }} pts</p>
-                <div class="w-full mt-2 rounded-t-lg bg-slate-200 flex items-end justify-center" style="height: 60px;"><span class="text-lg font-bold text-slate-600 mb-2">2</span></div>
-              </div>
-              <div v-if="standings[0]" class="flex flex-col items-center flex-1">
-                <div class="w-12 h-12 rounded-full bg-amber-100 border-2 border-amber-300 flex items-center justify-center text-base font-bold text-amber-700 mb-2">{{ standings[0].full_name?.charAt(0) ?? '?' }}</div>
-                <p class="text-xs font-bold text-slate-900 text-center truncate max-w-[80px]">{{ standings[0].full_name?.split(' ')[0] ?? 'Player' }}</p>
-                <p class="text-[10px] text-amber-700 font-semibold">{{ (standings[0].series_points ?? 0) + (standings[0].points_awarded ?? 0) }} pts</p>
-                <div class="w-full mt-2 rounded-t-lg bg-amber-100 border-2 border-amber-200 flex items-end justify-center" style="height: 90px;"><span class="text-2xl mb-2">&#x1F3C6;</span></div>
-              </div>
-              <div v-if="standings[2]" class="flex flex-col items-center flex-1">
-                <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-sm font-bold text-orange-700 mb-2">{{ standings[2].full_name?.charAt(0) ?? '?' }}</div>
-                <p class="text-[11px] font-semibold text-slate-700 text-center truncate max-w-[80px]">{{ standings[2].full_name?.split(' ')[0] ?? 'Player' }}</p>
-                <p class="text-[10px] text-slate-500">{{ (standings[2].series_points ?? 0) + (standings[2].points_awarded ?? 0) }} pts</p>
-                <div class="w-full mt-2 rounded-t-lg bg-orange-100 flex items-end justify-center" style="height: 40px;"><span class="text-lg font-bold text-orange-600 mb-2">3</span></div>
-              </div>
-            </div>
-            <ol v-if="standings.length > 3" class="mt-5 space-y-1.5 border-t border-slate-100 pt-4">
-              <li v-for="(p, i) in standings.slice(3)" :key="p.user_id" class="flex items-center gap-3 text-xs px-3 py-1.5 rounded-lg" :class="p.user_id === me?.id ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50'">
-                <span class="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">{{ i + 4 }}</span>
+            <h3 class="text-sm font-bold text-slate-900 text-center mb-4">{{ seriesComplete && match.total_rounds > 1 ? 'Series Podium' : (match.total_rounds > 1 ? 'Round ' + match.current_round + ' Podium' : 'Podium') }}</h3>
+            <ol class="space-y-1.5">
+              <li v-for="(p, i) in standings" :key="p.user_id" class="flex items-center gap-3 text-sm px-3 py-2 rounded-lg" :class="p.user_id === me?.id ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50'">
+                <span class="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[11px] font-bold text-slate-700">{{ i + 1 }}</span>
                 <span class="flex-1 truncate font-medium text-slate-800">{{ p.full_name ?? 'Team member' }}</span>
-                <span class="text-slate-500">{{ (p.series_points ?? 0) + (p.points_awarded ?? 0) }} pts</span>
+                <span class="text-xs text-slate-500 font-semibold">{{ (p.series_points ?? 0) + (p.points_awarded ?? 0) }} pts</span>
               </li>
             </ol>
+          </div>
+
+          <div v-if="isHost && (hasMoreRounds || seriesComplete) && standings.some(p => p.user_id !== match.host_user_id)" class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <div class="text-xs font-bold text-amber-900 uppercase tracking-wide mb-2">Roster for next round</div>
+            <ul class="space-y-1.5">
+              <li v-for="p in standings.filter(pp => pp.user_id !== match.host_user_id)" :key="p.user_id" class="flex items-center justify-between text-sm bg-white/70 rounded-lg px-3 py-1.5">
+                <span class="truncate font-medium" :class="p.eliminated ? 'text-slate-400 line-through' : 'text-slate-800'">{{ p.full_name ?? 'Team member' }}</span>
+                <button type="button" class="text-[10px] px-2 py-0.5 rounded-full border"
+                  :class="p.eliminated ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'border-rose-300 text-rose-600 hover:bg-rose-50'"
+                  @click="toggleKick(p.user_id)">{{ p.eliminated ? 'Bring back' : 'Sit out' }}</button>
+              </li>
+            </ul>
           </div>
 
           <div v-if="hasMoreRounds" class="rounded-2xl border border-sky-200 bg-sky-50 p-5 flex flex-wrap items-center justify-between gap-3">
@@ -513,11 +591,16 @@ function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
               {{ advancing ? 'Starting...' : 'Start next round' }}
             </button>
           </div>
-        </div>
 
-        <div v-if="myPlayer && myPlayer.completed && match.status === 'active'" class="rounded-2xl border border-slate-200 bg-white p-5 text-center">
-          <div v-if="myPlayer.won" class="text-emerald-700 font-semibold">You solved it! Waiting for others to finish.</div>
-          <div v-else class="text-slate-700 font-semibold">Out of guesses. Waiting for others to finish.</div>
+          <div v-if="seriesComplete && isHost" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 flex flex-wrap items-center justify-between gap-3">
+            <div class="text-sm text-emerald-900">
+              <strong>Play again in this same room?</strong>
+              <span class="text-emerald-800"> Everyone stays, scores reset, and you get a fresh word.</span>
+            </div>
+            <button type="button" :disabled="restarting" class="text-sm px-4 py-2 rounded-full bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-40" @click="restartRoom">
+              {{ restarting ? 'Restarting...' : 'Restart game' }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -526,11 +609,23 @@ function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
           <h3 class="text-sm font-bold text-slate-900">Live board</h3>
           <span class="text-[10px] uppercase tracking-wide text-slate-500">{{ standings.length }} players</span>
         </div>
+
+        <div v-if="match.status === 'active' && myPlayer && !myPlayer.completed" class="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-emerald-700 font-semibold">Your position</span>
+            <span class="font-mono font-bold text-emerald-900">
+              #{{ standings.findIndex(p => p.user_id === me?.id) + 1 }} of {{ standings.length }}
+            </span>
+          </div>
+        </div>
+
         <ol class="space-y-3">
-          <li v-for="(p, i) in standings" :key="p.user_id" class="space-y-1.5">
+          <li v-for="(p, i) in standings" :key="p.user_id" class="space-y-1">
             <div class="flex items-center justify-between text-xs">
               <div class="flex items-center gap-2 min-w-0">
-                <span class="w-4 text-right font-bold text-slate-400 tabular-nums">{{ i + 1 }}</span>
+                <span class="w-4 text-right font-bold tabular-nums" :class="i === 0 && p.won ? 'text-amber-500' : 'text-slate-400'">
+                  {{ i === 0 && p.won ? '&#9733;' : (i + 1) }}
+                </span>
                 <span class="truncate font-semibold text-slate-800">
                   {{ p.full_name ?? 'Team member' }}
                   <span v-if="p.user_id === me?.id" class="text-[10px] uppercase text-emerald-700 font-bold ml-1">You</span>
@@ -538,17 +633,13 @@ function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
               </div>
               <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold" :class="statusBadge(p).cls">{{ statusBadge(p).label }}</span>
             </div>
-            <div class="flex flex-col gap-0.5">
-              <div v-for="(row, rIdx) in p.results" :key="rIdx" class="flex gap-0.5">
-                <div
-                  v-for="(status, ci) in row"
-                  :key="ci"
-                  class="w-3 h-3 rounded-sm"
-                  :class="miniTileClass(status)"
-                ></div>
+            <div class="flex gap-1 flex-wrap">
+              <div v-for="(r, ri) in p.results" :key="ri" class="flex gap-0.5">
+                <div v-for="(cell, ci) in r" :key="ci" class="w-2.5 h-2.5 rounded-sm" :class="miniTileClass(cell)"></div>
               </div>
-              <div v-if="p.results.length === 0" class="text-[10px] text-slate-400">No guesses yet</div>
+              <div v-if="p.guesses.length === 0" class="text-[10px] text-slate-400">No guesses yet</div>
             </div>
+            <div v-if="p.won && p.points_awarded" class="text-[10px] text-emerald-600 font-semibold">+{{ p.points_awarded }} pts</div>
           </li>
         </ol>
         <button type="button" class="w-full text-xs px-3 py-2 rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50" @click="leaveRoom">
@@ -560,16 +651,27 @@ function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
 </template>
 
 <style scoped>
-@keyframes wshake {
+.hint-enter-active, .hint-leave-active { transition: opacity .3s ease, transform .3s ease; }
+.hint-enter-from, .hint-leave-to { opacity: 0; transform: translateY(-6px); }
+
+@keyframes shake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-6px); }
   40% { transform: translateX(6px); }
   60% { transform: translateX(-4px); }
   80% { transform: translateX(4px); }
 }
-@keyframes wflip {
+.animate-shake { animation: shake .45s ease; }
+
+@keyframes flipReveal {
   0% { transform: rotateX(0); }
-  45% { transform: rotateX(90deg); }
+  50% { transform: rotateX(90deg); }
   100% { transform: rotateX(0); }
 }
+.row-reveal > div { animation: flipReveal .55s ease; }
+.row-reveal > div:nth-child(2) { animation-delay: .1s; }
+.row-reveal > div:nth-child(3) { animation-delay: .2s; }
+.row-reveal > div:nth-child(4) { animation-delay: .3s; }
+.row-reveal > div:nth-child(5) { animation-delay: .4s; }
+.row-reveal > div:nth-child(6) { animation-delay: .5s; }
 </style>
