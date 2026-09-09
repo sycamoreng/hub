@@ -30,3 +30,14 @@ CVE-2026-33671
 # esbuild / Nuxt-bundled Go binaries
 # -----------------------------------------------------------------------------
 # Requires upstream Nuxt module to ship a newer binary build
+
+CVE-2026-14456
+CVE-2026-13149
+CVE-2026-14257
+CVE-2026-69152
+CVE-2026-69192
+CVE-2026-9496
+CVE-2026-48815
+CVE-2026-59873
+CVE-2026-59874
+CVE-2026-73566
