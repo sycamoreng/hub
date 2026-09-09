@@ -61,6 +61,7 @@ const groups: NavGroup[] = [
       { to: '/admin/raffle', label: "Workers' Day Raffle", icon: 'sparkle', section: 'raffle' },
       { to: '/admin/gamification', label: 'Gamification', icon: 'star', section: 'gamification' },
       { to: '/admin/leadership-qa', label: 'Leadership Q&A', icon: 'chat', section: 'leadership' },
+      { to: '/admin/surveys', label: 'Surveys', icon: 'check', section: 'surveys' },
       { to: '/admin/requests', label: 'Service Requests', icon: 'check', section: 'requests' },
       { to: '/admin/playlists', label: 'Playlists', icon: 'sparkle', section: 'playlists' },
       { to: '/admin/digest', label: 'Hub Digest', icon: 'mail', section: 'email' }
@@ -74,6 +75,7 @@ const groups: NavGroup[] = [
       { to: '/admin/policies', label: 'Policies', icon: 'book', section: 'policies' },
       { to: '/admin/benefits', label: 'Benefits', icon: 'gift', section: 'benefits' },
       { to: '/admin/hmo', label: 'HMO Providers', icon: 'gift', section: 'hmo' },
+      { to: '/admin/id-cards', label: 'ID Cards', icon: 'card', section: 'id-cards' },
       { to: '/admin/learning-budgets', label: 'Learning Budgets', icon: 'card', section: 'benefits' },
       { to: '/admin/branding', label: 'Branding', icon: 'palette', section: 'branding' },
       { to: '/admin/locations', label: 'Locations', icon: 'map', section: 'locations' },

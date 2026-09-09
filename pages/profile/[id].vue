@@ -46,7 +46,7 @@ const ownAuthAvatar = computed(() => {
   return (meta.avatar_url || meta.picture || '').trim()
 })
 
-const headerAvatar = computed(() => profile.value?.avatar_url || ownAuthAvatar.value)
+const headerAvatar = computed(() => profile.value?.avatar_url || staff.value?.avatar_url || ownAuthAvatar.value)
 
 const theme = computed(() => profile.value?.theme || 'sycamore')
 const gradient = computed(() => getThemeGradient(theme.value))

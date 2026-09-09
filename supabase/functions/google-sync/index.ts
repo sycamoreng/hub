@@ -261,10 +261,12 @@ async function runSync(ctx: SyncContext) {
   const users = await fetchAllUsers(ctx.accessToken, ctx.domain)
   const deptSource = ctx.settings?.department_source || 'organizations'
 
-  const counters = { added: 0, updated: 0, skipped: 0, excluded: 0, deactivated: 0, reactivated: 0 }
+  const counters = { added: 0, updated: 0, skipped: 0, excluded: 0, deactivated: 0, reactivated: 0, flagged: 0 }
   const diff: DiffEntry[] = []
   const errors: { email?: string; message: string }[] = []
   const seenStaffIds = new Set<string>()
+  const flagged: { email: string; full_name: string; tentative_exit_date: string }[] = []
+  const today = new Date().toISOString().slice(0, 10)
 
   for (const u of users) {
     try {
@@ -302,6 +304,34 @@ async function runSync(ctx: SyncContext) {
       // back on for hidden mailboxes or staff already marked as exited.
       if (existing && (existing.directory_visible === false || existing.exited_at)) {
         desired.is_active = existing.is_active === true ? true : false
+      }
+
+      // Flag staff who were active in the Hub but are now suspended in Google, so
+      // an admin can decide whether it was a genuine exit or something else.
+      // Google's directory does not expose a suspension date, so the tentative
+      // exit date is the date this sync first noticed the change.
+      const newlyDeactivated =
+        !!existing &&
+        existing.is_active !== false &&
+        !existing.exited_at &&
+        existing.directory_visible !== false &&
+        u.suspended === true
+      if (newlyDeactivated) {
+        counters.flagged += 1
+        flagged.push({ email, full_name: existing.full_name ?? fullName, tentative_exit_date: today })
+        if (ctx.mode === 'apply') {
+          await ctx.supabase.from('google_sync_deactivations').upsert(
+            {
+              staff_id: existing.id,
+              full_name: existing.full_name ?? fullName,
+              email,
+              google_user_id: u.id,
+              tentative_exit_date: today,
+              status: 'pending'
+            },
+            { onConflict: 'staff_id', ignoreDuplicates: true }
+          )
+        }
       }
 
       if (!existing) {
@@ -376,16 +406,15 @@ async function runSync(ctx: SyncContext) {
     }
   }
 
-  return { counters, diff, errors, seenStaffIds }
+  return { counters, diff, errors, seenStaffIds, flagged }
 }
 
 async function runPhotoOnlySync(ctx: SyncContext) {
   const users = await fetchAllUsers(ctx.accessToken, ctx.domain)
-  const staffByAuthId = new Map<string, any>()
-  for (const [, s] of ctx.existingByEmail) {
-    if (s.auth_user_id) staffByAuthId.set(s.auth_user_id, s)
-  }
-  const authIds = Array.from(staffByAuthId.keys())
+
+  // Hub photos for staff who have signed in (stored against their login).
+  const authIds: string[] = []
+  for (const [, s] of ctx.existingByEmail) if (s.auth_user_id) authIds.push(s.auth_user_id as string)
   const existingAvatars = new Map<string, string | null>()
   if (authIds.length) {
     const { data: profiles } = await ctx.supabase
@@ -400,7 +429,7 @@ async function runPhotoOnlySync(ctx: SyncContext) {
     .eq('field', 'avatar_url')
   const lockedAuthIds = new Set<string>((allLocks ?? []).map((r: any) => r.user_id as string))
 
-  const counters = { updated: 0, skipped: 0, missing_photo: 0, no_staff: 0, no_auth_user: 0, locked: 0, already_has: 0 }
+  const counters = { updated: 0, skipped: 0, missing_photo: 0, no_staff: 0, locked: 0, already_has: 0 }
   const errors: { email?: string; message: string }[] = []
   const changed: { email: string; avatar_url: string }[] = []
 
@@ -414,10 +443,13 @@ async function runPhotoOnlySync(ctx: SyncContext) {
       }
       const staff = ctx.existingByGoogleId.get(u.id) ?? ctx.existingByEmail.get(email)
       if (!staff) { counters.no_staff += 1; continue }
-      if (!staff.auth_user_id) { counters.no_auth_user += 1; continue }
-      if (lockedAuthIds.has(staff.auth_user_id)) { counters.locked += 1; continue }
-      const current = existingAvatars.get(staff.auth_user_id) ?? null
-      if (current && current.trim().length > 0) { counters.already_has += 1; continue }
+
+      const authId = (staff.auth_user_id as string | null) ?? null
+      const hubAvatar = authId ? (existingAvatars.get(authId) ?? null) : null
+      const staffAvatar = (staff.avatar_url as string) || null
+      const hasPhoto = !!(staffAvatar && staffAvatar.trim()) || !!(hubAvatar && hubAvatar.trim())
+      if (hasPhoto) { counters.already_has += 1; continue }
+
       if (ctx.mode !== 'apply') {
         if (u.thumbnailPhotoUrl) { counters.updated += 1 } else { counters.missing_photo += 1 }
         continue
@@ -427,10 +459,24 @@ async function runPhotoOnlySync(ctx: SyncContext) {
       if (!dl) { counters.missing_photo += 1; continue }
       const url = await uploadAvatar(ctx.supabase, u.id, dl.bytes, dl.contentType)
       if (!url) { counters.missing_photo += 1; continue }
-      const { error } = await ctx.supabase
-        .from('user_profiles')
-        .upsert({ user_id: staff.auth_user_id, avatar_url: url, avatar_source: 'google' }, { onConflict: 'user_id' })
-      if (error) throw error
+
+      // Photo on the staff record itself — shows in the directory/profile even
+      // for people who have never signed into the hub.
+      const { error: staffErr } = await ctx.supabase
+        .from('staff_members')
+        .update({ avatar_url: url, avatar_source: 'google' })
+        .eq('id', staff.id)
+      if (staffErr) throw staffErr
+
+      // If they have a hub login (and haven't locked their photo), mirror it to
+      // their profile so it also appears where they've posted, commented, etc.
+      if (authId && !lockedAuthIds.has(authId)) {
+        const { error: profErr } = await ctx.supabase
+          .from('user_profiles')
+          .upsert({ user_id: authId, avatar_url: url, avatar_source: 'google' }, { onConflict: 'user_id' })
+        if (profErr) throw profErr
+      }
+
       counters.updated += 1
       changed.push({ email, avatar_url: url })
     } catch (e: any) {
@@ -442,24 +488,38 @@ async function runPhotoOnlySync(ctx: SyncContext) {
 }
 
 async function maybeUploadAvatarForStaff(ctx: SyncContext, staffId: string, u: GoogleUser) {
-  const { data: staff } = await ctx.supabase.from('staff_members').select('auth_user_id').eq('id', staffId).maybeSingle()
-  const authUserId = staff?.auth_user_id
-  if (!authUserId) return
-  const { data: lock } = await ctx.supabase
-    .from('user_profile_locks')
-    .select('user_id')
-    .eq('user_id', authUserId)
-    .eq('field', 'avatar_url')
+  const { data: staff } = await ctx.supabase
+    .from('staff_members')
+    .select('auth_user_id, avatar_url')
+    .eq('id', staffId)
     .maybeSingle()
-  if (lock) return
+  if (!staff) return
+  if (staff.avatar_url && (staff.avatar_url as string).trim()) return
+  const authUserId = (staff.auth_user_id as string | null) ?? null
+  let locked = false
+  if (authUserId) {
+    const { data: lock } = await ctx.supabase
+      .from('user_profile_locks')
+      .select('user_id')
+      .eq('user_id', authUserId)
+      .eq('field', 'avatar_url')
+      .maybeSingle()
+    locked = !!lock
+  }
   const dl = await fetchAnyGooglePhoto(ctx.accessToken, u)
   if (!dl) return
   const url = await uploadAvatar(ctx.supabase, u.id, dl.bytes, dl.contentType)
   if (!url) return
-  await ctx.supabase.from('user_profiles').upsert(
-    { user_id: authUserId, avatar_url: url, avatar_source: 'google' },
-    { onConflict: 'user_id' }
-  )
+  await ctx.supabase
+    .from('staff_members')
+    .update({ avatar_url: url, avatar_source: 'google' })
+    .eq('id', staffId)
+  if (authUserId && !locked) {
+    await ctx.supabase.from('user_profiles').upsert(
+      { user_id: authUserId, avatar_url: url, avatar_source: 'google' },
+      { onConflict: 'user_id' }
+    )
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -531,7 +591,7 @@ Deno.serve(async (req: Request) => {
 
       try {
         const ctx = await loadContext(service, action, email)
-        const { counters, diff, errors } = await runSync(ctx)
+        const { counters, diff, errors, flagged } = await runSync(ctx)
 
         await service
           .from('google_sync_runs')
@@ -559,7 +619,7 @@ Deno.serve(async (req: Request) => {
             .eq('id', 'default')
         }
 
-        return jsonResponse({ run_id: run!.id, counters, diff, errors })
+        return jsonResponse({ run_id: run!.id, counters, diff, errors, flagged })
       } catch (e: any) {
         await service
           .from('google_sync_runs')
@@ -579,7 +639,7 @@ Deno.serve(async (req: Request) => {
     if (action === 'photo_status') {
       try {
         const [{ data: staffList }, { data: profs }, { data: locks }] = await Promise.all([
-          service.from('staff_members').select('id, full_name, email, google_user_id, auth_user_id, is_active, department_id').eq('is_active', true).order('full_name', { ascending: true }),
+          service.from('staff_members').select('id, full_name, email, google_user_id, auth_user_id, is_active, department_id, avatar_url, avatar_source').eq('is_active', true).order('full_name', { ascending: true }),
           service.from('user_profiles').select('user_id, avatar_url, avatar_source'),
           service.from('user_profile_locks').select('user_id, field').eq('field', 'avatar_url'),
         ])
@@ -600,7 +660,9 @@ Deno.serve(async (req: Request) => {
         const rows = (staffList ?? []).map((s: any) => {
           const gu = (s.google_user_id ? usersById.get(s.google_user_id) : null) ?? (s.email ? usersByEmail.get((s.email as string).toLowerCase()) : null)
           const prof = s.auth_user_id ? profileByUser.get(s.auth_user_id) : null
-          const hasHubPhoto = !!(prof?.url && prof.url.trim().length > 0)
+          const staffAvatar = (s.avatar_url as string) || null
+          const hubUrl = (staffAvatar && staffAvatar.trim()) ? staffAvatar : (prof?.url ?? null)
+          const hasHubPhoto = !!(hubUrl && hubUrl.trim().length > 0)
           const hasGooglePhoto = !!(gu && gu.thumbnailPhotoUrl)
           const locked = s.auth_user_id ? lockedUsers.has(s.auth_user_id) : false
           return {
@@ -609,8 +671,8 @@ Deno.serve(async (req: Request) => {
             email: s.email,
             department_id: s.department_id,
             has_hub_photo: hasHubPhoto,
-            hub_photo_url: prof?.url ?? null,
-            photo_source: prof?.source ?? null,
+            hub_photo_url: hubUrl,
+            photo_source: (staffAvatar && staffAvatar.trim()) ? (s.avatar_source ?? 'google') : (prof?.source ?? null),
             has_google_photo: hasGooglePhoto,
             google_photo_url: gu?.thumbnailPhotoUrl ?? null,
             avatar_locked: locked,

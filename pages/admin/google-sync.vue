@@ -7,6 +7,7 @@ interface RunRow { id: string; started_at: string; finished_at: string | null; m
 interface SettingsRow { id: string; domain: string; default_action: 'include'|'exclude'; auto_sync_enabled: boolean; department_source: 'organizations'|'orgUnitPath'; last_synced_at: string|null; last_sync_status: string|null; last_sync_error: string|null }
 interface RuleRow { email: string; action: 'include'|'exclude'; note: string }
 interface DeptMapRow { google_value: string; department_id: string | null }
+interface DeactivationRow { id: string; staff_id: string; full_name: string; email: string; tentative_exit_date: string | null; detected_at: string; status: string }
 
 const supabase = useSupabase()
 const toast = useToast()
@@ -25,6 +26,7 @@ const loadingUsers = ref(false)
 const loadingStatus = ref(true)
 const running = ref(false)
 const lastDiff = ref<any[]>([])
+const deactivations = ref<DeactivationRow[]>([])
 const userFilter = ref<'all'|'included'|'excluded'|'new'|'suspended'>('all')
 const userSearch = ref('')
 const userPage = ref(1)
@@ -129,6 +131,32 @@ async function loadExistingStaffEmails() {
   existingEmails.value = new Set((data ?? []).map((r: any) => (r.email ?? '').toLowerCase()))
 }
 
+async function loadDeactivations() {
+  const { data, error } = await supabase
+    .from('google_sync_deactivations')
+    .select('id, staff_id, full_name, email, tentative_exit_date, detected_at, status')
+    .eq('status', 'pending')
+    .order('detected_at', { ascending: false })
+  if (error) { toast.error(error.message); return }
+  deactivations.value = (data ?? []) as DeactivationRow[]
+}
+
+async function resolveDeactivation(row: DeactivationRow, status: 'dismissed' | 'actioned') {
+  try {
+    const { data: session } = await supabase.auth.getSession()
+    const { error } = await supabase
+      .from('google_sync_deactivations')
+      .update({ status, resolved_at: new Date().toISOString(), resolved_by: session.session?.user?.email ?? '' })
+      .eq('id', row.id)
+    if (error) throw error
+    deactivations.value = deactivations.value.filter(d => d.id !== row.id)
+    auditLog({ action: `deactivation_${status}`, target_type: 'staff_member', target_id: row.staff_id, target_label: row.full_name || row.email })
+    toast.success(status === 'dismissed' ? 'Alert dismissed' : 'Marked as handled')
+  } catch (e: any) {
+    toast.error(e.message)
+  }
+}
+
 const recentlyAddedRange = ref<7 | 14 | 30 | 90>(14)
 const recentlyAddedStaff = computed(() => {
   const cutoff = Date.now() - recentlyAddedRange.value * 24 * 60 * 60 * 1000
@@ -186,6 +214,59 @@ async function excludeFromDirectory(staff: { id: string; email: string; full_nam
     toast.success(`${staff.full_name || staff.email} excluded`)
   } catch (e: any) {
     toast.error(e.message)
+  }
+}
+
+const exitModal = ref<{ open: boolean; staff: { id: string; email: string; full_name: string } | null; date: string; reason: string; deactivationId: string | null; saving: boolean }>({
+  open: false, staff: null, date: '', reason: '', deactivationId: null, saving: false
+})
+
+const todayIso = () => new Date().toISOString().slice(0, 10)
+
+function openExitModal(staff: { id: string; email: string; full_name: string }, opts: { date?: string | null; deactivationId?: string | null } = {}) {
+  exitModal.value = {
+    open: true,
+    staff: { id: staff.id, email: staff.email, full_name: staff.full_name },
+    date: opts.date || todayIso(),
+    reason: 'No longer in Google Workspace',
+    deactivationId: opts.deactivationId ?? null,
+    saving: false
+  }
+}
+
+function closeExitModal() {
+  if (exitModal.value.saving) return
+  exitModal.value = { ...exitModal.value, open: false, staff: null }
+}
+
+async function confirmMarkExited() {
+  const m = exitModal.value
+  if (!m.staff || !m.date) return
+  exitModal.value = { ...exitModal.value, saving: true }
+  try {
+    const em = m.staff.email.toLowerCase()
+    const reason = m.reason.trim() || 'No longer in Google Workspace'
+    const [{ error: staffErr }, { error: ruleErr }] = await Promise.all([
+      supabase.from('staff_members').update({ is_active: false, exited_at: m.date, exit_reason: reason }).eq('id', m.staff.id),
+      supabase.from('google_sync_rules').upsert({ email: em, action: 'exclude' }, { onConflict: 'email' })
+    ])
+    if (staffErr) throw staffErr
+    if (ruleErr) throw ruleErr
+    rules.value = new Map(rules.value.set(em, { email: em, action: 'exclude', note: rules.value.get(em)?.note ?? '' }))
+    staffRecords.value = staffRecords.value.map(s => s.id === m.staff!.id ? { ...s, is_active: false } : s)
+    if (m.deactivationId) {
+      const { data: session } = await supabase.auth.getSession()
+      await supabase.from('google_sync_deactivations')
+        .update({ status: 'actioned', resolved_at: new Date().toISOString(), resolved_by: session.session?.user?.email ?? '' })
+        .eq('id', m.deactivationId)
+      deactivations.value = deactivations.value.filter(d => d.id !== m.deactivationId)
+    }
+    auditLog({ action: 'mark_exited', target_type: 'staff_member', target_id: m.staff.id, target_label: m.staff.full_name || m.staff.email, details: { exited_at: m.date, exit_reason: reason } })
+    toast.success(`${m.staff.full_name || m.staff.email} marked as exited`)
+    exitModal.value = { open: false, staff: null, date: '', reason: '', deactivationId: null, saving: false }
+  } catch (e: any) {
+    toast.error(e.message)
+    exitModal.value = { ...exitModal.value, saving: false }
   }
 }
 
@@ -291,8 +372,9 @@ async function runApply() {
   try {
     const res = await callFn('apply', 'POST')
     auditLog({ action: 'sync_apply', target_type: 'google_sync', details: res.counters })
-    toast.success(`Sync complete: +${res.counters.added}, ~${res.counters.updated}, off${res.counters.deactivated}, on${res.counters.reactivated}`)
-    await loadStatus()
+    const flaggedCount = res.counters?.flagged ?? 0
+    toast.success(`Sync complete: +${res.counters.added}, ~${res.counters.updated}, off${res.counters.deactivated}, on${res.counters.reactivated}${flaggedCount ? `, ${flaggedCount} flagged for review` : ''}`)
+    await Promise.all([loadStatus(), loadDeactivations()])
   } catch (e: any) {
     toast.error(e.message)
   } finally {
@@ -379,7 +461,7 @@ function fmtTime(iso: string | null) {
 
 onMounted(async () => {
   if (!isSuperAdmin.value) return
-  await Promise.all([loadStatus(), loadRules(), loadDeptMap(), loadExistingStaffEmails()])
+  await Promise.all([loadStatus(), loadRules(), loadDeptMap(), loadExistingStaffEmails(), loadDeactivations()])
   await loadUsers()
 })
 </script>
@@ -442,6 +524,33 @@ onMounted(async () => {
           <div class="text-lg font-semibold text-slate-900 mt-1 capitalize">{{ settings?.default_action || 'include' }}</div>
           <div class="text-xs text-slate-500 mt-1">for users without a rule</div>
         </div>
+      </div>
+
+      <div class="card p-4" :class="deactivations.length ? 'border border-amber-300 bg-amber-50' : ''">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-sm font-semibold" :class="deactivations.length ? 'text-amber-900' : 'text-slate-900'">Deactivated in Google — needs review</h2>
+          <span class="text-xs font-semibold rounded-full px-2 py-0.5" :class="deactivations.length ? 'text-amber-700 bg-amber-100' : 'text-slate-500 bg-slate-100'">{{ deactivations.length }}</span>
+        </div>
+        <p class="text-xs mb-3" :class="deactivations.length ? 'text-amber-700' : 'text-slate-500'">
+          When a sync finds someone who was active here but is now switched off in Google, they appear here for review instead of being retired automatically. The tentative exit date is the day the sync first noticed the change (Google does not report the exact date).
+        </p>
+        <div v-if="!deactivations.length" class="text-xs text-emerald-600">
+          No one needs review right now. Anyone switched off in Google will show up here after the next sync.
+        </div>
+        <ul v-else class="space-y-2">
+          <li v-for="d in deactivations" :key="d.id" class="flex flex-wrap items-center justify-between gap-2 bg-white rounded-lg border border-amber-200 px-3 py-2">
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-slate-900 truncate">{{ d.full_name || d.email }}</div>
+              <div class="text-xs text-slate-500 truncate">{{ d.email }} · tentative exit {{ d.tentative_exit_date || '—' }}</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="text-xs font-semibold text-rose-700 hover:text-rose-800 px-2 py-1 rounded border border-rose-200 hover:bg-rose-50" @click="openExitModal({ id: d.staff_id, email: d.email, full_name: d.full_name }, { date: d.tentative_exit_date, deactivationId: d.id })">Mark as exited</button>
+              <NuxtLink to="/admin/exits" class="text-xs font-semibold text-amber-800 hover:text-amber-900 underline">Start exit</NuxtLink>
+              <button class="text-xs font-semibold text-slate-600 hover:text-slate-900 px-2 py-1 rounded border border-slate-200" @click="resolveDeactivation(d, 'actioned')">Mark handled</button>
+              <button class="text-xs font-semibold text-slate-500 hover:text-slate-700 px-2 py-1 rounded" @click="resolveDeactivation(d, 'dismissed')">Dismiss</button>
+            </div>
+          </li>
+        </ul>
       </div>
 
       <div v-if="settings?.last_sync_error" class="card p-4 border border-rose-200 bg-rose-50 text-sm text-rose-700">
@@ -545,7 +654,8 @@ onMounted(async () => {
             </div>
             <div class="flex gap-1 shrink-0">
               <button class="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" @click="setRule(s.email, 'exclude')">Exclude rule only</button>
-              <button class="text-xs px-2 py-1 rounded border border-rose-200 text-rose-700 hover:bg-rose-50" @click="excludeFromDirectory(s)">Exclude from directory</button>
+              <button class="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" @click="excludeFromDirectory(s)">Exclude from directory</button>
+              <button class="text-xs px-2 py-1 rounded border border-rose-200 text-rose-700 hover:bg-rose-50" @click="openExitModal(s)">Mark as exited</button>
             </div>
           </li>
         </ul>
@@ -821,5 +931,32 @@ onMounted(async () => {
         </div>
       </div>
     </section>
+
+    <div v-if="exitModal.open" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-900/40" @click="closeExitModal"></div>
+      <div class="relative card p-5 w-full max-w-md space-y-4">
+        <div>
+          <h2 class="text-base font-semibold text-slate-900">Mark as exited</h2>
+          <p class="text-xs text-slate-500 mt-1">
+            {{ exitModal.staff?.full_name || exitModal.staff?.email }} will be set as exited, hidden from the staff directory, and skipped by future syncs.
+          </p>
+        </div>
+        <div>
+          <label class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Exit date</label>
+          <input v-model="exitModal.date" type="date" :max="todayIso()" class="input" />
+          <p class="text-xs text-slate-500 mt-1">Defaults to the day this was noticed in Google Workspace. Adjust if you know the real last day.</p>
+        </div>
+        <div>
+          <label class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Reason</label>
+          <input v-model="exitModal.reason" type="text" class="input" placeholder="No longer in Google Workspace" />
+        </div>
+        <div class="flex justify-end gap-2 pt-1">
+          <button class="btn-secondary" :disabled="exitModal.saving" @click="closeExitModal">Cancel</button>
+          <button class="btn-primary" :disabled="exitModal.saving || !exitModal.date" @click="confirmMarkExited">
+            {{ exitModal.saving ? 'Saving...' : 'Mark as exited' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

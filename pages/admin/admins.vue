@@ -59,7 +59,9 @@ const SECTIONS = [
   { key: 'forums', label: 'Forums' },
   { key: 'playlists', label: 'Playlists' },
   { key: 'requests', label: 'Service Requests' },
+  { key: 'surveys', label: 'Surveys' },
   { key: 'hmo', label: 'HMO' },
+  { key: 'id-cards', label: 'ID Cards' },
   { key: 'audit-log', label: 'Audit Log' }
 ]
 const ACTIONS: CrudAction[] = ['create', 'read', 'update', 'delete']

@@ -65,7 +65,8 @@ const baseGroups = computed<NavGroup[]>(() => [
       { to: '/locations', label: 'Locations', icon: 'map' },
       { to: '/staff', label: 'Staff Directory', icon: 'users' },
       { to: '/celebrations', label: 'Celebrations', icon: 'sparkle' },
-      { to: '/ask-leadership', label: 'Ask Leadership', icon: 'chat' }
+      { to: '/ask-leadership', label: 'Ask Leadership', icon: 'chat' },
+      { to: '/surveys', label: 'Surveys', icon: 'check' }
     ]
   },
   {
@@ -96,6 +97,7 @@ const baseGroups = computed<NavGroup[]>(() => [
       { to: '/benefits', label: 'Benefits & Perks', icon: 'gift' },
       { to: '/hmo', label: 'My HMO', icon: 'gift' },
       { to: '/branding', label: 'Branding', icon: 'palette' },
+      { to: '/id-card', label: 'My ID Card', icon: 'card' },
       { to: '/payroll', label: 'My Payroll', icon: 'card' },
       { to: '/finance', label: 'Advance & Loans', icon: 'card' },
       { to: '/leave', label: 'Leave', icon: 'calendar' },

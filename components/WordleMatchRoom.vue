@@ -58,26 +58,21 @@ async function maybeShowHint(remaining: number) {
   const canFetchHint2 = elapsed >= total * 0.7
   const canFetchHint1 = elapsed >= total * 0.3
 
-  if (!hint1Fetched.value && canFetchHint1) {
-    hint1Fetched.value = true
-    try {
-      const h = await getRiddleHint(match.value!.id)
-      if (h) showHint(h, 'riddle')
-      else hint1Fetched.value = false
-    } catch {
-      hint1Fetched.value = false
-    }
-  }
-
   if (!hint2Fetched.value && canFetchHint2) {
     hint2Fetched.value = true
     try {
       const h = await getHint(match.value!.id)
       if (h) showHint(h, 'letter')
-      else hint2Fetched.value = false
-    } catch {
-      hint2Fetched.value = false
-    }
+    } catch {}
+    return
+  }
+
+  if (!hint1Fetched.value && canFetchHint1) {
+    hint1Fetched.value = true
+    try {
+      const h = await getRiddleHint(match.value!.id)
+      if (h) showHint(h, 'riddle')
+    } catch {}
   }
 }
 
@@ -560,7 +555,7 @@ function statusBadge(p: WordleMatchPlayer): { label: string; cls: string } {
             <h2 class="text-lg font-bold" :class="myPlayer?.won ? 'text-emerald-800' : 'text-slate-800'">
               {{ myPlayer?.won ? 'You got it!' : (match.winner_user_id ? 'Someone solved it' : 'Round over') }}
             </h2>
-            <p v-if="match?.target" class="mt-2 text-sm text-slate-700">The word was <span class="font-mono font-bold uppercase tracking-widest">{{ match.target }}</span>.</p>
+            <p v-if="board?.target" class="mt-2 text-sm text-slate-700">The word was <span class="font-mono font-bold uppercase tracking-widest">{{ board.target }}</span>.</p>
             <p v-if="myPlayer?.won && myPlayer.points_awarded" class="mt-1 text-sm text-emerald-700 font-semibold">+{{ myPlayer.points_awarded }} points</p>
           </div>
 

@@ -104,8 +104,10 @@ function initials(name: string) {
 }
 
 function avatar(s: any): string | null {
-  if (!s.auth_user_id) return null
-  return profilesByUid.value[s.auth_user_id]?.avatar_url || null
+  if (s.auth_user_id && profilesByUid.value[s.auth_user_id]?.avatar_url) {
+    return profilesByUid.value[s.auth_user_id]!.avatar_url
+  }
+  return s.avatar_url || null
 }
 </script>
 
